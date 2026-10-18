@@ -109,6 +109,31 @@ class PlanTabelleTest {
     }
 
     @Test
+    void mehrerenFilmenEineReiheZuweisen() throws IOException {
+        Path ziel = quelle.resolve("Sammlung");
+        datei("Batman.Begins.2005.German.1080p/bb.mkv");
+        datei("The.Dark.Knight.2008.German.1080p/tdk.mkv");
+        datei("Dark.S01E01.German.720p/dark.mkv");
+        PlanTabelle tabelle = new PlanTabelle();
+        int[] aenderungen = {0};
+        tabelle.beiAenderung(() -> aenderungen[0]++);
+        tabelle.anzeigen(Vorschlaege.einlesen(quelle, ziel), quelle);
+        assertEquals(List.of(), tabelle.bekannteReihen());
+
+        // Zeilen nach Fundort: Batman, Dark (Serienfolge), The Dark Knight.
+        assertEquals(2, tabelle.reiheSetzen(new int[] {0, 1, 2}, "Batman"));
+        assertEquals("Batman", tabelle.getValueAt(0, PlanTabelle.REIHE));
+        assertEquals("", tabelle.getValueAt(1, PlanTabelle.REIHE));
+        assertEquals(Path.of("Batman", "The Dark Knight (2008)", "The Dark Knight (2008).mkv").toString(),
+                tabelle.getValueAt(2, PlanTabelle.NEUER_ORT));
+        assertEquals(List.of("Batman"), tabelle.bekannteReihen());
+        assertEquals(1, aenderungen[0]);
+
+        assertEquals(2, tabelle.reiheSetzen(new int[] {0, 2}, ""));
+        assertEquals("", tabelle.getValueAt(2, PlanTabelle.REIHE));
+    }
+
+    @Test
     void zusammenfassungZaehltNachArt() {
         Film f = new Film(quelle.resolve("a.mkv"), 1, null, List.of());
         assertEquals("Keine Filme gefunden.", Fenster.zusammenfassung(List.of()));

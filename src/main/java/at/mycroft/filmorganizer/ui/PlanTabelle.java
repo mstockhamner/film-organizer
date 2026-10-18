@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.TreeSet;
 import javax.swing.table.AbstractTableModel;
 
 /**
@@ -147,6 +148,44 @@ final class PlanTabelle extends AbstractTableModel {
         }
         fireTableDataChanged();
         nachAenderung.run();
+    }
+
+    /**
+     * Setzt die Filmreihe für mehrere Zeilen auf einmal (leer: aus der Reihe nehmen). Serienfolgen und
+     * Filme ohne erkannten Titel werden übergangen.
+     *
+     * @return Anzahl der Filme, deren Reihe gesetzt wurde
+     */
+    int reiheSetzen(int[] zeilen, String reihe) {
+        int gesetzt = 0;
+        for (int zeile : zeilen) {
+            Aktion aktion = plan.get(zeile);
+            if (aktion.film().erkannt() && !aktion.film().info().istFolge()) {
+                vorschlaege.reiheSetzen(aktion.film().video(), reihe);
+                gesetzt++;
+            }
+        }
+        if (gesetzt > 0) {
+            try {
+                plan = vorschlaege.plan();
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+            fireTableDataChanged();
+            nachAenderung.run();
+        }
+        return gesetzt;
+    }
+
+    /** Alle Filmreihen aus Vorschau und Sammlung, alphabetisch, für die Auswahl beim Zuweisen. */
+    List<String> bekannteReihen() {
+        TreeSet<String> reihen = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        if (vorschlaege != null) {
+            reihen.addAll(vorschlaege.sammlungsReihen());
+        }
+        plan.stream().filter(a -> a.film().erkannt()).map(a -> a.film().info().reihe())
+                .filter(r -> !r.isEmpty()).forEach(reihen::add);
+        return List.copyOf(reihen);
     }
 
     /** Auswahl für die Spalte Entscheidung in dieser Zeile, der Vorschlag ist gekennzeichnet. */

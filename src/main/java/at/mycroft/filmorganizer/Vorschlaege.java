@@ -11,6 +11,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * Die eingelesenen Filme mit den vorgeschlagenen Titeln und Jahren, die vor dem Einsortieren
@@ -117,6 +118,13 @@ public final class Vorschlaege {
     /** Setzt die Filmreihe eines Films von Hand; leer heißt "gehört zu keiner Reihe". */
     public void reiheSetzen(Path video, String reihe) {
         reihen.put(video, reihe == null ? "" : reihe.trim());
+    }
+
+    /** Namen aller Filmreihen, die es in der Sammlung schon gibt. */
+    public Set<String> sammlungsReihen() {
+        Set<String> reihen = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        katalog.eintraege().stream().map(e -> e.info().reihe()).filter(r -> !r.isEmpty()).forEach(reihen::add);
+        return reihen;
     }
 
     /** Ob der Film beim Einlesen in der Quelle gefunden wurde (und nicht schon in der Sammlung liegt). */

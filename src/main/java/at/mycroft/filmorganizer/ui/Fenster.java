@@ -19,6 +19,7 @@ import java.io.OutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.Callable;
@@ -37,8 +38,10 @@ import javax.swing.JComponent;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
 import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
@@ -63,6 +66,8 @@ public final class Fenster extends JFrame {
     private final JButton vorschau = new JButton("Titel einlesen");
     private final JButton einsortieren = new JButton("Einsortieren …");
     private final JButton rueckgaengig = new JButton("Letzten Lauf rückgängig …");
+    private final JButton reiheZuweisen = new JButton("Filmreihe zuweisen …");
+    private final JTable ansicht = new JTable();
     private final JLabel status = new JLabel("Quelle und Ziel wählen, dann „Titel einlesen“.");
     private final JProgressBar fortschritt = new JProgressBar();
     private final PlanTabelle tabelle = new PlanTabelle();
@@ -78,7 +83,10 @@ public final class Fenster extends JFrame {
         vorschau.addActionListener(e -> vorschauErstellen());
         einsortieren.addActionListener(e -> einsortieren());
         rueckgaengig.addActionListener(e -> rueckgaengigMachen());
+        reiheZuweisen.addActionListener(e -> reiheZuweisen());
         einsortieren.setEnabled(false);
+        reiheZuweisen.setEnabled(false);
+        ansicht.getSelectionModel().addListSelectionListener(e -> reiheZuweisen.setEnabled(ansicht.getSelectedRowCount() > 0));
         tabelle.beiAenderung(this::nachAenderung);
         Log.beiUnerwartetemFehler(fehler -> SwingUtilities.invokeLater(() -> fehlerAnzeigen("Unerwarteter Fehler", fehler)));
 
@@ -108,6 +116,8 @@ public final class Fenster extends JFrame {
         knoepfe.add(vorschau);
         knoepfe.add(Box.createHorizontalStrut(8));
         knoepfe.add(einsortieren);
+        knoepfe.add(Box.createHorizontalStrut(24));
+        knoepfe.add(reiheZuweisen);
         knoepfe.add(Box.createHorizontalStrut(24));
         knoepfe.add(rueckgaengig);
         GridBagConstraints c = new GridBagConstraints();
@@ -140,8 +150,16 @@ public final class Fenster extends JFrame {
     }
 
     private JScrollPane tabellenBereich() {
-        JTable ansicht = new JTable(tabelle);
+        ansicht.setModel(tabelle);
         ansicht.setAutoCreateRowSorter(true);
+        JPopupMenu menue = new JPopupMenu();
+        JMenuItem zuweisen = new JMenuItem("Filmreihe zuweisen …");
+        zuweisen.addActionListener(e -> reiheZuweisen());
+        JMenuItem entfernen = new JMenuItem("Aus Filmreihe entfernen");
+        entfernen.addActionListener(e -> reiheSetzen(""));
+        menue.add(zuweisen);
+        menue.add(entfernen);
+        ansicht.setComponentPopupMenu(menue);
         ansicht.setFillsViewportHeight(true);
         ansicht.setRowHeight(ansicht.getRowHeight() + 4);
         ansicht.putClientProperty("terminateEditOnFocusLost", Boolean.TRUE);
@@ -222,6 +240,43 @@ public final class Fenster extends JFrame {
         einsortieren.setEnabled(anzahl(plan, Art.EINSORTIEREN) + anzahl(plan, Art.ERSETZEN)
                 + anzahl(plan, Art.UMSORTIEREN) + quarantaene(plan) > 0);
         status.setText(zusammenfassung(plan));
+    }
+
+    /** Fragt nach einer Filmreihe und setzt sie für alle markierten Filme. */
+    private void reiheZuweisen() {
+        int[] zeilen = markierteZeilen();
+        if (zeilen.length == 0) {
+            fehler("Bitte zuerst einen oder mehrere Filme in der Tabelle markieren (Strg- oder Umschalt-Klick).");
+            return;
+        }
+        JComboBox<String> auswahl = new JComboBox<>(tabelle.bekannteReihen().toArray(String[]::new));
+        auswahl.setEditable(true);
+        auswahl.setSelectedItem("");
+        int antwort = JOptionPane.showConfirmDialog(this, new Object[] {
+            zeilen.length + " markierte Filme in diese Filmreihe aufnehmen.\n"
+                    + "Vorhandene Reihe wählen oder neuen Namen eintippen; leer heißt: aus der Reihe nehmen.",
+            auswahl}, "Filmreihe zuweisen", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (antwort == JOptionPane.OK_OPTION) {
+            Object wert = auswahl.getEditor().getItem();
+            reiheSetzen(wert == null ? "" : wert.toString().trim());
+        }
+    }
+
+    private void reiheSetzen(String reihe) {
+        int[] zeilen = markierteZeilen();
+        if (zeilen.length == 0) {
+            fehler("Bitte zuerst einen oder mehrere Filme in der Tabelle markieren (Strg- oder Umschalt-Klick).");
+            return;
+        }
+        int uebergangen = zeilen.length - tabelle.reiheSetzen(zeilen, reihe);
+        if (uebergangen > 0) {
+            JOptionPane.showMessageDialog(this, uebergangen + " markierte Zeilen sind Serienfolgen oder Filme ohne "
+                    + "Titel und Jahr und wurden übergangen.", "Filmreihe", JOptionPane.INFORMATION_MESSAGE);
+        }
+    }
+
+    private int[] markierteZeilen() {
+        return Arrays.stream(ansicht.getSelectedRows()).map(ansicht::convertRowIndexToModel).toArray();
     }
 
     private void einsortieren() {
