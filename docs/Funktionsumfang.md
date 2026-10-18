@@ -39,6 +39,7 @@ Stufenweise, damit nicht jede Datei komplett gelesen werden muss:
 2. **Gleiche Datei:** gleiche Größe, dann Prüfsumme über Anfang, Mitte und Ende der Datei, auf Wunsch volle Prüfsumme.
 - Bericht pro Doublettengruppe mit Größe, Auflösung und Pfad, plus Vorschlag, welche Fassung behalten wird (höchste Auflösung, dann größte Datei).
 - **Prüfung beim Import:** Jeder Import prüft automatisch auf Doubletten, und zwar innerhalb der neuen Filme und gegen die bereits einsortierte Sammlung. Ein als Doublette erkannter Film wird nicht einsortiert, sondern in der Vorschau gemeldet. Es wird nicht stillschweigend etwas ersetzt: Wenn die neue Fassung besser ist, kann sie auf Bestätigung die alte ersetzen, und die alte kommt in die Quarantäne.
+- **Quarantäne** (entschieden 18.10.2026): `Ziel\_Doubletten\<Datum>\<alter Pfad ohne Laufwerk>`, z.B. `Ziel\_Doubletten\2026-10-18\Daten-Filmorganizer\Kopie\film.mkv`, samt Begleitdateien. Beim Ausführen kommen identische Dateien und Fassungen mit niedrigerer Auflösung dorthin. Bessere oder nicht eindeutig vergleichbare Fassungen (z.B. Auflösung unbekannt) bleiben in der Quelle liegen. Ein abgewählter Film bleibt ebenfalls liegen. Die Verschiebungen stehen im Protokoll und lassen sich rückgängig machen. Gelöscht wird nichts, die Quarantäne leert Marc selbst.
 
 ### 3.4 Neue Struktur
 - Die Filme werden aus den Quellordnern in einen **neuen Zielordner** verschoben (entschieden 18.10.2026). Die Quellordner bleiben danach mit den nicht zugeordneten Resten (z.B. `Thumbs.db`) zurück und werden nicht automatisch gelöscht.

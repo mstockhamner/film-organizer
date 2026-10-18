@@ -83,6 +83,9 @@ public final class Main {
                     }
                 } else {
                     aus.println("      " + aktion.hinweis());
+                    if (aktion.inQuarantaene()) {
+                        aus.println("      -> Quarantäne: " + aktion.verschiebungen().get(0).nach());
+                    }
                 }
             }
         }
@@ -92,7 +95,8 @@ public final class Main {
     private static String ueberschrift(Art art) {
         return switch (art) {
             case EINSORTIEREN -> "Wird einsortiert";
-            case DOUBLETTE -> "Doubletten, bleiben liegen";
+            case DOUBLETTE -> "Doubletten (identische und schlechtere kommen nach " + Planer.QUARANTAENE
+                    + ", andere bleiben liegen)";
             case UNERKANNT -> "Nicht erkannt, bleiben liegen";
             case KONFLIKT -> "Konflikte, bleiben liegen";
             case AUSGELASSEN -> "Ausgelassen, bleiben liegen";
@@ -103,7 +107,8 @@ public final class Main {
         List<Aktion> plan = planErstellen(quelle, ziel);
         vorschauAusgeben(plan, aus);
         long anzahl = plan.stream().filter(a -> a.art() == Art.EINSORTIEREN).count();
-        if (anzahl == 0) {
+        long quarantaene = plan.stream().filter(Aktion::inQuarantaene).count();
+        if (anzahl == 0 && quarantaene == 0) {
             aus.println("Nichts einzusortieren.");
             return;
         }
@@ -112,7 +117,8 @@ public final class Main {
             aus.printf(Locale.ROOT, "Auf dem Ziellaufwerk fehlen %.1f GB. Abbruch.%n", fehlt / 1e9);
             return;
         }
-        aus.print(anzahl + " Filme verschieben? Zum Bestätigen \"ja\" eingeben: ");
+        aus.print(anzahl + " Filme einsortieren und " + quarantaene + " Doubletten nach " + Planer.QUARANTAENE
+                + " verschieben? Zum Bestätigen \"ja\" eingeben: ");
         aus.flush();
         String antwort = new BufferedReader(new InputStreamReader(System.in)).readLine();
         if (antwort == null || !antwort.trim().equalsIgnoreCase("ja")) {
@@ -120,6 +126,7 @@ public final class Main {
             return;
         }
         int erledigt = Ausfuehrung.ausfuehren(plan, ziel, aus);
-        aus.println(erledigt + " Filme einsortiert. Rückgängig mit: rueckgaengig \"" + ziel + "\"");
+        aus.println(erledigt + " Filme einsortiert, " + quarantaene + " Doubletten in " + Planer.QUARANTAENE
+                + ". Rückgängig mit: rueckgaengig \"" + ziel + "\"");
     }
 }

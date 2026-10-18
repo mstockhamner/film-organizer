@@ -33,7 +33,8 @@ public final class Ausfuehrung {
 
     private static final String PROTOKOLLE = "protokolle";
     private static final String ERLEDIGT = ".rueckgaengig";
-    private static final DateTimeFormatter ZEITSTEMPEL = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
+    // Mit Millisekunden, damit zwei Läufe in derselben Sekunde verschiedene Protokolle bekommen.
+    private static final DateTimeFormatter ZEITSTEMPEL = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS");
 
     private static final Logger LOG = Log.fuer(Ausfuehrung.class);
 
@@ -54,7 +55,10 @@ public final class Ausfuehrung {
         return Math.max(0, benoetigt - zielLaufwerk.getUsableSpace());
     }
 
-    /** Führt alle {@link Art#EINSORTIEREN}-Aktionen aus und gibt die Anzahl verschobener Filme zurück. */
+    /**
+     * Führt alle {@link Art#EINSORTIEREN}-Aktionen aus, verschiebt Doubletten in die Quarantäne und
+     * gibt die Anzahl einsortierter Filme zurück.
+     */
     public static int ausfuehren(List<Aktion> plan, Path ziel, PrintStream ausgabe) throws IOException {
         Files.createDirectories(ziel);
         Katalog katalog = Katalog.laden(ziel);
@@ -65,7 +69,7 @@ public final class Ausfuehrung {
         try (BufferedWriter schreiber = Files.newBufferedWriter(protokoll, StandardCharsets.UTF_8,
                 StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
             for (Aktion aktion : plan) {
-                if (aktion.art() != Art.EINSORTIEREN) {
+                if (aktion.art() != Art.EINSORTIEREN && !aktion.inQuarantaene()) {
                     continue;
                 }
                 for (Verschiebung v : aktion.verschiebungen()) {
@@ -76,6 +80,10 @@ public final class Ausfuehrung {
                     schreiber.flush();
                 }
                 Path video = aktion.verschiebungen().get(0).nach();
+                if (aktion.inQuarantaene()) {
+                    ausgabe.println("in Quarantäne: " + ziel.relativize(video));
+                    continue;
+                }
                 katalog.hinzufuegen(new Katalog.Eintrag(aktion.film().info(), ziel.relativize(video).toString(),
                         aktion.film().groesse()));
                 katalog.speichern();

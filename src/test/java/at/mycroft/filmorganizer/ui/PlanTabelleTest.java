@@ -58,7 +58,8 @@ class PlanTabelleTest {
         Film f = new Film(quelle.resolve("a.mkv"), 1, null, List.of());
         assertEquals("Keine Filme gefunden.", Fenster.zusammenfassung(List.of()));
         assertTrue(Fenster.zusammenfassung(List.of(new Aktion(Art.UNERKANNT, f, List.of(), "")))
-                .startsWith("0 werden einsortiert, 0 Doubletten, 1 nicht erkannt, 0 Konflikte, 0 ausgelassen."));
+                .startsWith("0 werden einsortiert, 0 Doubletten (davon 0 in Quarantäne), 1 nicht erkannt, "
+                        + "0 Konflikte, 0 ausgelassen."));
     }
 
     private void datei(String pfad) throws IOException {

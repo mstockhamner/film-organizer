@@ -5,6 +5,7 @@ import at.mycroft.filmorganizer.Aktion.Verschiebung;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -18,6 +19,10 @@ import java.util.Set;
 /**
  * Erstellt aus den gefundenen Filmen einen Plan: was einsortiert wird, was eine Doublette ist
  * und was liegen bleibt. Ändert nichts im Dateisystem.
+ *
+ * <p>Doubletten kommen in die Quarantäne {@code Ziel/_Doubletten/<Datum>/}, wenn sie eine identische
+ * Datei oder eine Fassung mit niedrigerer Auflösung sind. Bessere oder nicht eindeutig vergleichbare
+ * Fassungen bleiben in der Quelle liegen.
  */
 public final class Planer {
 
@@ -26,12 +31,17 @@ public final class Planer {
             .comparingInt((Film f) -> f.info().aufloesung()).reversed()
             .thenComparing(Comparator.comparingLong(Film::groesse).reversed());
 
+    /** Ordner im Ziel, in den Doubletten verschoben werden, statt sie zu löschen. */
+    public static final String QUARANTAENE = "_Doubletten";
+
     private final Path ziel;
+    private final Path quarantaene;
     private final Katalog katalog;
     private final Map<Path, String> pruefsummen = new HashMap<>();
 
     private Planer(Path ziel, Katalog katalog) {
         this.ziel = ziel;
+        this.quarantaene = ziel.resolve(QUARANTAENE).resolve(LocalDate.now().toString());
         this.katalog = katalog;
     }
 
@@ -57,8 +67,16 @@ public final class Planer {
             Film bester = sortiert.get(0);
             kandidaten.add(bester);
             for (Film andere : sortiert.subList(1, sortiert.size())) {
-                aktionen.add(new Aktion(Art.DOUBLETTE, andere, List.of(),
-                        "gleicher Film wie " + bester.video() + " (diese Fassung wird einsortiert)"));
+                if (gleicheDatei(andere, List.of(bester)) != null) {
+                    aktionen.add(quarantaene(andere, "identische Datei wie " + bester.video()));
+                } else if (schlechter(andere.info().aufloesung(), bester.info().aufloesung())) {
+                    aktionen.add(quarantaene(andere, "gleicher Film wie " + bester.video()
+                            + " (schlechtere Fassung: " + andere.info().aufloesung() + "p statt "
+                            + bester.info().aufloesung() + "p)"));
+                } else {
+                    aktionen.add(new Aktion(Art.DOUBLETTE, andere, List.of(),
+                            "gleicher Film wie " + bester.video() + " (diese Fassung wird einsortiert)"));
+                }
             }
         }
 
@@ -67,7 +85,7 @@ public final class Planer {
         for (Film film : kandidaten) {
             Film gleich = gleicheDatei(film, eindeutig);
             if (gleich != null) {
-                aktionen.add(new Aktion(Art.DOUBLETTE, film, List.of(), "identische Datei wie " + gleich.video()));
+                aktionen.add(quarantaene(film, "identische Datei wie " + gleich.video()));
             } else {
                 eindeutig.add(film);
             }
@@ -83,15 +101,18 @@ public final class Planer {
     private Aktion gegenSammlung(Film film) throws IOException {
         Katalog.Eintrag vorhanden = katalog.finden(film.info().schluessel());
         if (vorhanden != null) {
-            return new Aktion(Art.DOUBLETTE, film, List.of(),
-                    "schon in der Sammlung: " + vorhanden.video() + vergleich(film, vorhanden));
+            if (identisch(film, vorhanden)) {
+                return quarantaene(film, "identische Datei schon in der Sammlung: " + vorhanden.video());
+            }
+            String hinweis = "schon in der Sammlung: " + vorhanden.video() + vergleich(film, vorhanden);
+            // Eine bessere oder gleichwertige neue Fassung bleibt liegen, bis über das Ersetzen entschieden ist.
+            return schlechter(film.info().aufloesung(), vorhanden.info().aufloesung())
+                    ? quarantaene(film, hinweis)
+                    : new Aktion(Art.DOUBLETTE, film, List.of(), hinweis);
         }
         for (Katalog.Eintrag eintrag : katalog.eintraege()) {
-            Path video = ziel.resolve(eintrag.video());
-            if (eintrag.groesse() == film.groesse() && Files.isRegularFile(video)
-                    && pruefsumme(video).equals(pruefsumme(film.video()))) {
-                return new Aktion(Art.DOUBLETTE, film, List.of(),
-                        "identische Datei schon in der Sammlung: " + eintrag.video());
+            if (identisch(film, eintrag)) {
+                return quarantaene(film, "identische Datei schon in der Sammlung: " + eintrag.video());
             }
         }
 
@@ -129,6 +150,43 @@ public final class Planer {
                     : " (vorhandene Datei ist größer)";
         }
         return "";
+    }
+
+    /**
+     * Doublette, die in die Quarantäne kommt. Video und Begleitdateien behalten dort ihren alten
+     * Pfad ohne Laufwerk, z.B. {@code F:\Filme\X\a.mkv} nach {@code Ziel\_Doubletten\2026-10-18\Filme\X\a.mkv},
+     * damit immer erkennbar bleibt, woher eine Datei kam. Ist dieser Platz schon belegt, bleibt sie liegen.
+     */
+    private Aktion quarantaene(Film film, String hinweis) {
+        List<Verschiebung> verschiebungen = new ArrayList<>();
+        verschiebungen.add(new Verschiebung(film.video(), inQuarantaene(film.video())));
+        for (Path begleit : film.begleitdateien()) {
+            verschiebungen.add(new Verschiebung(begleit, inQuarantaene(begleit)));
+        }
+        for (Verschiebung v : verschiebungen) {
+            if (Files.exists(v.nach())) {
+                return new Aktion(Art.DOUBLETTE, film, List.of(),
+                        hinweis + "; bleibt liegen, in der Quarantäne liegt schon " + v.nach());
+            }
+        }
+        return new Aktion(Art.DOUBLETTE, film, verschiebungen, hinweis);
+    }
+
+    private Path inQuarantaene(Path datei) {
+        Path absolut = datei.toAbsolutePath().normalize();
+        Path ohneLaufwerk = absolut.getRoot() == null ? absolut : absolut.getRoot().relativize(absolut);
+        return quarantaene.resolve(ohneLaufwerk);
+    }
+
+    /** Nur bei bekannter Auflösung auf beiden Seiten ist eine Fassung sicher schlechter. */
+    private static boolean schlechter(int aufloesung, int vergleich) {
+        return aufloesung > 0 && vergleich > 0 && aufloesung < vergleich;
+    }
+
+    private boolean identisch(Film film, Katalog.Eintrag eintrag) throws IOException {
+        Path video = ziel.resolve(eintrag.video());
+        return eintrag.groesse() == film.groesse() && Files.isRegularFile(video)
+                && pruefsumme(video).equals(pruefsumme(film.video()));
     }
 
     private Film gleicheDatei(Film film, List<Film> andere) throws IOException {

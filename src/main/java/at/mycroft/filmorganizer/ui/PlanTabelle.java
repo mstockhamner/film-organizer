@@ -22,6 +22,8 @@ final class PlanTabelle extends AbstractTableModel {
     static final int GEFUNDEN = 4;
     static final int NEUER_ORT = 5;
 
+    static final String IN_QUARANTAENE = "Doublette → Quarantäne";
+
     private static final String[] SPALTEN = {"Übernehmen", "Status", "Titel", "Jahr", "Gefunden in",
         "Neuer Ort / Hinweis"};
 
@@ -90,7 +92,7 @@ final class PlanTabelle extends AbstractTableModel {
         Aktion aktion = plan.get(index);
         return switch (spalte) {
             case UEBERNEHMEN -> !vorschlaege.istAusgelassen(aktion.film().video());
-            case STATUS -> status(aktion.art());
+            case STATUS -> aktion.inQuarantaene() ? IN_QUARANTAENE : status(aktion.art());
             case TITEL -> vorschlaege.titel(aktion.film());
             case JAHR -> {
                 int jahr = vorschlaege.jahr(aktion.film());
@@ -99,6 +101,8 @@ final class PlanTabelle extends AbstractTableModel {
             case GEFUNDEN -> relativ(quelle, aktion.film().video());
             default -> aktion.art() == Aktion.Art.EINSORTIEREN
                     ? relativ(vorschlaege.ziel(), aktion.verschiebungen().get(0).nach())
+                    : aktion.inQuarantaene()
+                    ? relativ(vorschlaege.ziel(), aktion.verschiebungen().get(0).nach()) + " (" + aktion.hinweis() + ")"
                     : hinweis(aktion);
         };
     }

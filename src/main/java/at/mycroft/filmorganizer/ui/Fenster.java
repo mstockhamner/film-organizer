@@ -4,6 +4,7 @@ import at.mycroft.filmorganizer.Aktion;
 import at.mycroft.filmorganizer.Aktion.Art;
 import at.mycroft.filmorganizer.Ausfuehrung;
 import at.mycroft.filmorganizer.Log;
+import at.mycroft.filmorganizer.Planer;
 import at.mycroft.filmorganizer.Vorschlaege;
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -205,7 +206,7 @@ public final class Fenster extends JFrame {
 
     private void nachAenderung() {
         List<Aktion> plan = tabelle.plan();
-        einsortieren.setEnabled(anzahl(plan, Art.EINSORTIEREN) > 0);
+        einsortieren.setEnabled(anzahl(plan, Art.EINSORTIEREN) + quarantaene(plan) > 0);
         status.setText(zusammenfassung(plan));
     }
 
@@ -213,9 +214,12 @@ public final class Fenster extends JFrame {
         List<Aktion> plan = tabelle.plan();
         Path z = tabelle.ziel();
         long anzahl = anzahl(plan, Art.EINSORTIEREN);
+        long quarantaene = quarantaene(plan);
         int antwort = JOptionPane.showConfirmDialog(this,
                 anzahl + " Filme nach\n" + z + "\nverschieben?\n\n"
-                        + "Alles andere (Doubletten, nicht erkannte, ausgelassene Filme, Konflikte) bleibt liegen.\n"
+                        + quarantaene + " Doubletten (identisch oder schlechter) kommen nach "
+                        + z.resolve(Planer.QUARANTAENE) + ".\n"
+                        + "Alles andere (übrige Doubletten, nicht erkannte, ausgelassene Filme, Konflikte) bleibt liegen.\n"
                         + "Der Lauf lässt sich danach rückgängig machen.",
                 "Einsortieren", JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
         if (antwort != JOptionPane.OK_OPTION) {
@@ -230,7 +234,8 @@ public final class Fenster extends JFrame {
             }
             return Ausfuehrung.ausfuehren(plan, z, stilleAusgabe());
         }, erledigt -> {
-            JOptionPane.showMessageDialog(this, erledigt + " Filme einsortiert.", "Fertig",
+            JOptionPane.showMessageDialog(this, erledigt + " Filme einsortiert, " + quarantaene
+                    + " Doubletten in " + Planer.QUARANTAENE + " verschoben.", "Fertig",
                     JOptionPane.INFORMATION_MESSAGE);
             vorschauErstellen();
         });
@@ -297,7 +302,7 @@ public final class Fenster extends JFrame {
             return "Keine Filme gefunden.";
         }
         return anzahl(plan, Art.EINSORTIEREN) + " werden einsortiert, "
-                + anzahl(plan, Art.DOUBLETTE) + " Doubletten, "
+                + anzahl(plan, Art.DOUBLETTE) + " Doubletten (davon " + quarantaene(plan) + " in Quarantäne), "
                 + anzahl(plan, Art.UNERKANNT) + " nicht erkannt, "
                 + anzahl(plan, Art.KONFLIKT) + " Konflikte, " + anzahl(plan, Art.AUSGELASSEN) + " ausgelassen. "
                 + "Titel und Jahr lassen sich per Doppelklick ändern. Es wurde noch nichts verändert.";
@@ -305,6 +310,10 @@ public final class Fenster extends JFrame {
 
     private static long anzahl(List<Aktion> plan, Art art) {
         return plan.stream().filter(a -> a.art() == art).count();
+    }
+
+    private static long quarantaene(List<Aktion> plan) {
+        return plan.stream().filter(Aktion::inQuarantaene).count();
     }
 
     /** Protokolliert den Fehler mit Stacktrace und zeigt ihn mit Hinweis auf das Logfile an. */
@@ -331,7 +340,7 @@ public final class Fenster extends JFrame {
             if (!ausgewaehlt) {
                 c.setForeground(switch (String.valueOf(wert)) {
                     case "Wird einsortiert" -> new Color(0x1B7F3B);
-                    case "Doublette" -> new Color(0xB35C00);
+                    case "Doublette", PlanTabelle.IN_QUARANTAENE -> new Color(0xB35C00);
                     case "Ausgelassen" -> Color.GRAY;
                     default -> new Color(0xB00020);
                 });
