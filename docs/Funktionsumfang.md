@@ -53,7 +53,7 @@ Stufenweise, damit nicht jede Datei komplett gelesen werden muss:
 - Ein Befehl macht die letzte Ausführung vollständig rückgängig.
 
 ### 3.6 Bedienung
-- **Oberfläche** (Java Swing, ohne zusätzliche Bibliotheken): Quelle und Ziel wählen, Vorschau als Tabelle ansehen, nach Bestätigung einsortieren, letzten Lauf rückgängig machen. Start per Doppelklick auf `Filmorganizer.bat` oder `java -jar` ohne Argumente. Die zuletzt gewählten Ordner merkt sich das Programm lokal.
+- **Oberfläche** (Java Swing, ohne zusätzliche Bibliotheken): Quelle und Ziel wählen, „Titel einlesen“ liest alle Filme ein und zeigt eine Maske mit Vorschlag für Titel, Jahr und neuen Ort. Titel und Jahr lassen sich dort per Doppelklick ändern (auch für nicht erkannte Filme), einzelne Filme lassen sich abwählen. Jede Änderung aktualisiert Zielordner und Doublettenprüfung sofort. Danach nach Bestätigung einsortieren oder den letzten Lauf rückgängig machen. Start per Doppelklick auf `Filmorganizer.bat` oder `java -jar` ohne Argumente. Die zuletzt gewählten Ordner merkt sich das Programm lokal.
 - **Kommandozeile** für dieselben Funktionen: `vorschau`, `ausfuehren`, `rueckgaengig`.
 
 ## 4. Nicht im Umfang (erste Version)

@@ -21,7 +21,9 @@ public record Aktion(Art art, Film film, List<Verschiebung> verschiebungen, Stri
         /** Titel oder Jahr nicht erkannt, bleibt liegen. */
         UNERKANNT,
         /** Zielpfad ist schon belegt, bleibt liegen. */
-        KONFLIKT
+        KONFLIKT,
+        /** In der Vorschau abgewählt, bleibt liegen. */
+        AUSGELASSEN
     }
 
     /** Eine einzelne Datei, die verschoben wird. */

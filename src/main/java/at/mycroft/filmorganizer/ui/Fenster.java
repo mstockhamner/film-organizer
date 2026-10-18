@@ -3,7 +3,7 @@ package at.mycroft.filmorganizer.ui;
 import at.mycroft.filmorganizer.Aktion;
 import at.mycroft.filmorganizer.Aktion.Art;
 import at.mycroft.filmorganizer.Ausfuehrung;
-import at.mycroft.filmorganizer.Main;
+import at.mycroft.filmorganizer.Vorschlaege;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -12,6 +12,7 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
@@ -51,13 +52,12 @@ public final class Fenster extends JFrame {
 
     private final JTextField quelle = new JTextField(EINSTELLUNGEN.get("quelle", ""), 40);
     private final JTextField ziel = new JTextField(EINSTELLUNGEN.get("ziel", ""), 40);
-    private final JButton vorschau = new JButton("Vorschau erstellen");
+    private final JButton vorschau = new JButton("Titel einlesen");
     private final JButton einsortieren = new JButton("Einsortieren …");
     private final JButton rueckgaengig = new JButton("Letzten Lauf rückgängig …");
-    private final JLabel status = new JLabel("Quelle und Ziel wählen, dann „Vorschau erstellen“.");
+    private final JLabel status = new JLabel("Quelle und Ziel wählen, dann „Titel einlesen“.");
     private final JProgressBar fortschritt = new JProgressBar();
     private final PlanTabelle tabelle = new PlanTabelle();
-    private Path vorschauZiel;
 
     public Fenster() {
         super("Filmorganizer");
@@ -71,6 +71,7 @@ public final class Fenster extends JFrame {
         einsortieren.addActionListener(e -> einsortieren());
         rueckgaengig.addActionListener(e -> rueckgaengigMachen());
         einsortieren.setEnabled(false);
+        tabelle.beiAenderung(this::nachAenderung);
 
         setSize(1100, 650);
         setLocationRelativeTo(null);
@@ -134,22 +135,23 @@ public final class Fenster extends JFrame {
         ansicht.setAutoCreateRowSorter(true);
         ansicht.setFillsViewportHeight(true);
         ansicht.setRowHeight(ansicht.getRowHeight() + 4);
-        ansicht.getColumnModel().getColumn(0).setPreferredWidth(110);
-        ansicht.getColumnModel().getColumn(1).setPreferredWidth(220);
-        ansicht.getColumnModel().getColumn(2).setPreferredWidth(380);
-        ansicht.getColumnModel().getColumn(3).setPreferredWidth(380);
-        ansicht.getColumnModel().getColumn(0).setCellRenderer(new StatusDarstellung());
+        ansicht.putClientProperty("terminateEditOnFocusLost", Boolean.TRUE);
+        int[] breiten = {80, 110, 240, 60, 330, 330};
+        for (int spalte = 0; spalte < breiten.length; spalte++) {
+            ansicht.getColumnModel().getColumn(spalte).setPreferredWidth(breiten[spalte]);
+        }
+        ansicht.getColumnModel().getColumn(PlanTabelle.STATUS).setCellRenderer(new StatusDarstellung());
         DefaultTableCellRenderer mitTooltip = new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object wert, boolean ausgewaehlt,
                     boolean fokus, int zeile, int spalte) {
                 JComponent c = (JComponent) super.getTableCellRendererComponent(
                         table, wert, ausgewaehlt, fokus, zeile, spalte);
-                c.setToolTipText(String.valueOf(wert));
+                c.setToolTipText(wert == null ? null : String.valueOf(wert));
                 return c;
             }
         };
-        for (int spalte = 1; spalte < tabelle.getColumnCount(); spalte++) {
+        for (int spalte : new int[] {PlanTabelle.TITEL, PlanTabelle.GEFUNDEN, PlanTabelle.NEUER_ORT}) {
             ansicht.getColumnModel().getColumn(spalte).setCellRenderer(mitTooltip);
         }
         JScrollPane rahmen = new JScrollPane(ansicht);
@@ -185,22 +187,30 @@ public final class Fenster extends JFrame {
         Path z = Path.of(ziel.getText().trim());
         EINSTELLUNGEN.put("quelle", q.toString());
         EINSTELLUNGEN.put("ziel", z.toString());
-        imHintergrund("Durchsuche " + q + " …", () -> Main.planErstellen(q, z), plan -> {
-            tabelle.anzeigen(plan, q, z);
-            vorschauZiel = z;
-            long anzahl = anzahl(plan, Art.EINSORTIEREN);
-            einsortieren.setEnabled(anzahl > 0);
-            status.setText(zusammenfassung(plan));
+        imHintergrund("Lese alle Titel in " + q + " ein …", () -> Vorschlaege.einlesen(q, z), vorschlaege -> {
+            try {
+                tabelle.anzeigen(vorschlaege, q);
+            } catch (IOException e) {
+                fehler(e.getMessage());
+                return;
+            }
+            nachAenderung();
         });
+    }
+
+    private void nachAenderung() {
+        List<Aktion> plan = tabelle.plan();
+        einsortieren.setEnabled(anzahl(plan, Art.EINSORTIEREN) > 0);
+        status.setText(zusammenfassung(plan));
     }
 
     private void einsortieren() {
         List<Aktion> plan = tabelle.plan();
-        Path z = vorschauZiel;
+        Path z = tabelle.ziel();
         long anzahl = anzahl(plan, Art.EINSORTIEREN);
         int antwort = JOptionPane.showConfirmDialog(this,
                 anzahl + " Filme nach\n" + z + "\nverschieben?\n\n"
-                        + "Doubletten, nicht erkannte Filme und Konflikte bleiben liegen.\n"
+                        + "Alles andere (Doubletten, nicht erkannte, ausgelassene Filme, Konflikte) bleibt liegen.\n"
                         + "Der Lauf lässt sich danach rückgängig machen.",
                 "Einsortieren", JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
         if (antwort != JOptionPane.OK_OPTION) {
@@ -242,9 +252,9 @@ public final class Fenster extends JFrame {
                     String hinweise = meldungen.toString(StandardCharsets.UTF_8).trim();
                     JOptionPane.showMessageDialog(this, hinweise.isEmpty() ? text : text + "\n\n" + hinweise,
                             "Rückgängig", JOptionPane.INFORMATION_MESSAGE);
-                    tabelle.anzeigen(List.of(), z, z);
+                    tabelle.leeren();
                     einsortieren.setEnabled(false);
-                    status.setText(text + " Für eine neue Vorschau „Vorschau erstellen“ klicken.");
+                    status.setText(text + " Für neue Vorschläge „Titel einlesen“ klicken.");
                 });
     }
 
@@ -284,7 +294,8 @@ public final class Fenster extends JFrame {
         return anzahl(plan, Art.EINSORTIEREN) + " werden einsortiert, "
                 + anzahl(plan, Art.DOUBLETTE) + " Doubletten, "
                 + anzahl(plan, Art.UNERKANNT) + " nicht erkannt, "
-                + anzahl(plan, Art.KONFLIKT) + " Konflikte. Es wurde noch nichts verändert.";
+                + anzahl(plan, Art.KONFLIKT) + " Konflikte, " + anzahl(plan, Art.AUSGELASSEN) + " ausgelassen. "
+                + "Titel und Jahr lassen sich per Doppelklick ändern. Es wurde noch nichts verändert.";
     }
 
     private static long anzahl(List<Aktion> plan, Art art) {
@@ -309,6 +320,7 @@ public final class Fenster extends JFrame {
                 c.setForeground(switch (String.valueOf(wert)) {
                     case "Wird einsortiert" -> new Color(0x1B7F3B);
                     case "Doublette" -> new Color(0xB35C00);
+                    case "Ausgelassen" -> Color.GRAY;
                     default -> new Color(0xB00020);
                 });
             }

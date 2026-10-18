@@ -1,36 +1,59 @@
 package at.mycroft.filmorganizer.ui;
 
 import at.mycroft.filmorganizer.Aktion;
+import at.mycroft.filmorganizer.Vorschlaege;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Path;
-import java.util.Comparator;
 import java.util.List;
 import javax.swing.table.AbstractTableModel;
 
 /**
- * Tabellenmodell für die Vorschau: eine Zeile pro gefundenem Film.
+ * Tabellenmodell der Vorschau: eine Zeile pro eingelesenem Film. Titel und Jahr lassen sich
+ * direkt in der Tabelle ändern, über "Übernehmen" wird ein Film an- oder abgewählt. Nach jeder
+ * Änderung wird neu geplant, damit Zielordner und Doubletten sofort stimmen.
  */
 final class PlanTabelle extends AbstractTableModel {
 
-    private static final String[] SPALTEN = {"Status", "Film", "Gefunden in", "Neuer Ort / Hinweis"};
+    static final int UEBERNEHMEN = 0;
+    static final int STATUS = 1;
+    static final int TITEL = 2;
+    static final int JAHR = 3;
+    static final int GEFUNDEN = 4;
+    static final int NEUER_ORT = 5;
 
+    private static final String[] SPALTEN = {"Übernehmen", "Status", "Titel", "Jahr", "Gefunden in",
+        "Neuer Ort / Hinweis"};
+
+    private Vorschlaege vorschlaege;
     private List<Aktion> plan = List.of();
     private Path quelle;
-    private Path ziel;
+    private Runnable nachAenderung = () -> { };
 
-    /** Zeigt den Plan an, Einsortieren zuerst, dann Doubletten, nicht erkannte Filme und Konflikte. */
-    void anzeigen(List<Aktion> neuerPlan, Path neueQuelle, Path neuesZiel) {
-        plan = neuerPlan.stream().sorted(Comparator.comparing(Aktion::art)).toList();
+    void anzeigen(Vorschlaege neueVorschlaege, Path neueQuelle) throws IOException {
+        vorschlaege = neueVorschlaege;
         quelle = neueQuelle;
-        ziel = neuesZiel;
+        plan = neueVorschlaege.plan();
         fireTableDataChanged();
+    }
+
+    void leeren() {
+        vorschlaege = null;
+        plan = List.of();
+        fireTableDataChanged();
+    }
+
+    /** Wird nach jeder Änderung in der Tabelle aufgerufen. */
+    void beiAenderung(Runnable aktion) {
+        nachAenderung = aktion;
     }
 
     List<Aktion> plan() {
         return plan;
     }
 
-    Aktion zeile(int index) {
-        return plan.get(index);
+    Path ziel() {
+        return vorschlaege == null ? null : vorschlaege.ziel();
     }
 
     @Override
@@ -49,16 +72,66 @@ final class PlanTabelle extends AbstractTableModel {
     }
 
     @Override
+    public Class<?> getColumnClass(int spalte) {
+        return switch (spalte) {
+            case UEBERNEHMEN -> Boolean.class;
+            case JAHR -> Integer.class;
+            default -> String.class;
+        };
+    }
+
+    @Override
+    public boolean isCellEditable(int zeile, int spalte) {
+        return spalte == UEBERNEHMEN || spalte == TITEL || spalte == JAHR;
+    }
+
+    @Override
     public Object getValueAt(int index, int spalte) {
         Aktion aktion = plan.get(index);
         return switch (spalte) {
-            case 0 -> status(aktion.art());
-            case 1 -> aktion.film().erkannt() ? aktion.film().info().zielName() : "?";
-            case 2 -> relativ(quelle, aktion.film().video());
+            case UEBERNEHMEN -> !vorschlaege.istAusgelassen(aktion.film().video());
+            case STATUS -> status(aktion.art());
+            case TITEL -> vorschlaege.titel(aktion.film());
+            case JAHR -> {
+                int jahr = vorschlaege.jahr(aktion.film());
+                yield jahr > 0 ? jahr : null;
+            }
+            case GEFUNDEN -> relativ(quelle, aktion.film().video());
             default -> aktion.art() == Aktion.Art.EINSORTIEREN
-                    ? relativ(ziel, aktion.verschiebungen().get(0).nach())
-                    : aktion.hinweis();
+                    ? relativ(vorschlaege.ziel(), aktion.verschiebungen().get(0).nach())
+                    : hinweis(aktion);
         };
+    }
+
+    @Override
+    public void setValueAt(Object wert, int index, int spalte) {
+        Path video = plan.get(index).film().video();
+        Aktion aktion = plan.get(index);
+        switch (spalte) {
+            case UEBERNEHMEN -> vorschlaege.auslassen(video, !Boolean.TRUE.equals(wert));
+            case TITEL -> vorschlaege.korrigieren(video, String.valueOf(wert), vorschlaege.jahr(aktion.film()));
+            case JAHR -> vorschlaege.korrigieren(video, vorschlaege.titel(aktion.film()),
+                    wert instanceof Integer jahr ? jahr : 0);
+            default -> {
+                return;
+            }
+        }
+        try {
+            plan = vorschlaege.plan();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        fireTableDataChanged();
+        nachAenderung.run();
+    }
+
+    private String hinweis(Aktion aktion) {
+        if (aktion.art() == Aktion.Art.UNERKANNT) {
+            return vorschlaege.titel(aktion.film()).isEmpty() || vorschlaege.jahr(aktion.film()) == 0
+                    ? "Titel und Jahr in der Tabelle eintragen"
+                    : aktion.hinweis();
+        }
+        return aktion.hinweis();
     }
 
     private static String relativ(Path basis, Path pfad) {
@@ -73,6 +146,7 @@ final class PlanTabelle extends AbstractTableModel {
             case DOUBLETTE -> "Doublette";
             case UNERKANNT -> "Nicht erkannt";
             case KONFLIKT -> "Konflikt";
+            case AUSGELASSEN -> "Ausgelassen";
         };
     }
 }

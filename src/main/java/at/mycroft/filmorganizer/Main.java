@@ -90,6 +90,7 @@ public final class Main {
             case DOUBLETTE -> "Doubletten, bleiben liegen";
             case UNERKANNT -> "Nicht erkannt, bleiben liegen";
             case KONFLIKT -> "Konflikte, bleiben liegen";
+            case AUSGELASSEN -> "Ausgelassen, bleiben liegen";
         };
     }
 
