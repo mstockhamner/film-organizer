@@ -34,9 +34,30 @@ class LeereOrdnerTest {
         Ausfuehrung.ausfuehren(Main.planErstellen(quelle, ziel), quelle, ziel, still);
 
         assertFalse(Files.exists(quelle.resolve("Der gestiefelte Kater (1080p)")), "ganz leer, auch mit leerem Unterordner");
-        assertTrue(Files.exists(quelle.resolve("Das.Dschungelbuch.2016.German.1080p/Thumbs.db")), "nicht leer, bleibt");
+        assertFalse(Files.exists(quelle.resolve("Das.Dschungelbuch.2016.German.1080p")), "nur Thumbs.db übrig: gelöscht");
         assertTrue(Files.isDirectory(quelle.resolve("Schon vorher leer")), "nicht betroffen, bleibt");
         assertTrue(Files.isDirectory(quelle), "die Quelle selbst bleibt");
+    }
+
+    @Test
+    void systemresteWerdenMitgeloeschtAnderesBleibt() throws IOException {
+        Path quelle = basis.resolve("Quelle");
+        Path ziel = basis.resolve("Sammlung");
+        datei(quelle, "Der.Pate.1972.German.1080p/pate.mkv");
+        datei(quelle, "Der.Pate.1972.German.1080p/desktop.ini");
+        datei(quelle, "Der.Pate.1972.German.1080p/.DS_Store");
+        datei(quelle, "Der.Pate.1972.German.1080p/@eaDir/pate.mkv/SYNOVIDEO_VIDEO_SCREENSHOT.jpg");
+        datei(quelle, "Der.Pate.1972.German.1080p/Extras/@eaDir/x/SYNOPHOTO_THUMB_M.jpg");
+        datei(quelle, "Der.Pate.1972.German.1080p/Extras/Thumbs.db");
+        datei(quelle, "Matrix.1999.German.1080p/matrix.mkv");
+        datei(quelle, "Matrix.1999.German.1080p/Thumbs.db");
+        datei(quelle, "Matrix.1999.German.1080p/notizen.txt");
+
+        Ausfuehrung.ausfuehren(Main.planErstellen(quelle, ziel), quelle, ziel, still);
+
+        assertFalse(Files.exists(quelle.resolve("Der.Pate.1972.German.1080p")), "nur Systemreste: weg");
+        assertTrue(Files.exists(quelle.resolve("Matrix.1999.German.1080p/notizen.txt")), "eigene Datei: bleibt");
+        assertTrue(Files.exists(quelle.resolve("Matrix.1999.German.1080p/Thumbs.db")), "Ordner bleibt, also auch der Rest");
     }
 
     @Test

@@ -5,6 +5,7 @@ import at.mycroft.filmorganizer.Aktion.NeueDatei;
 import at.mycroft.filmorganizer.Aktion.Verschiebung;
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
@@ -21,6 +22,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.logging.Logger;
 import java.util.stream.Stream;
@@ -258,8 +260,10 @@ public final class Ausfuehrung {
 
     /**
      * Entfernt leere Ordner, aus denen etwas verschoben wurde: zuerst leere Unterordner darin, dann den
-     * Ordner selbst und seine Elternordner, solange sie leer sind. Grenze ist die Quelle (bzw. das Ziel,
-     * wenn der Ordner darin liegt); Quelle, Ziel und Ordner außerhalb der Quelle bleiben immer stehen.
+     * Ordner selbst und seine Elternordner, solange sie leer sind. Als leer gilt auch ein Ordner, in dem nur
+     * noch Systemreste liegen ({@code Thumbs.db}, {@code desktop.ini}, {@code .DS_Store}, {@code @eaDir} der
+     * Synology); diese werden mitgelöscht. Grenze ist die Quelle (bzw. das Ziel, wenn der Ordner darin liegt);
+     * Quelle, Ziel und Ordner außerhalb der Quelle bleiben immer stehen.
      */
     static void leereQuellordnerEntfernen(Set<Path> ordner, Path quelle, Path ziel, PrintStream ausgabe)
             throws IOException {
@@ -275,13 +279,10 @@ public final class Ausfuehrung {
             }
             for (Path o = start; o != null && o.startsWith(grenze) && !o.equals(grenze) && !o.equals(zielAbs);
                     o = o.getParent()) {
-                if (!Files.isDirectory(o) || !leer(o)) {
+                if (!Files.isDirectory(o) || !nurReste(o)) {
                     break;
                 }
-                Files.delete(o);
-                Path entfernt = o;
-                LOG.info(() -> "Leerer Ordner entfernt: " + entfernt);
-                ausgabe.println("leerer Ordner entfernt: " + o);
+                mitRestenEntfernen(o, ausgabe);
             }
         }
     }
@@ -290,21 +291,60 @@ public final class Ausfuehrung {
         List<Path> tiefsteZuerst;
         try (Stream<Path> alle = Files.walk(ordner)) {
             tiefsteZuerst = alle.filter(Files::isDirectory).filter(o -> !o.equals(ordner) && !o.startsWith(zielAbs))
+                    .filter(o -> !inEaDir(o, ordner))
                     .sorted(Comparator.reverseOrder()).toList();
         }
         for (Path o : tiefsteZuerst) {
-            if (leer(o)) {
-                Files.delete(o);
-                LOG.info(() -> "Leerer Ordner entfernt: " + o);
-                ausgabe.println("leerer Ordner entfernt: " + o);
+            if (Files.isDirectory(o) && nurReste(o)) {
+                mitRestenEntfernen(o, ausgabe);
             }
         }
     }
 
-    private static boolean leer(Path ordner) throws IOException {
+    /** Dateien, die Windows, macOS oder die Synology von selbst anlegen und die nicht zur Sammlung gehören. */
+    private static final Set<String> SYSTEMRESTE = Set.of("thumbs.db", "ehthumbs.db", "ehthumbs_vista.db",
+            "desktop.ini", ".ds_store");
+    private static final String EADIR = "@eadir";
+
+    /** Ob ein Ordner leer ist oder nur Systemreste enthält (auch in Unterordnern, {@code @eaDir} ganz). */
+    static boolean nurReste(Path ordner) throws IOException {
         try (Stream<Path> inhalt = Files.list(ordner)) {
-            return inhalt.findAny().isEmpty();
+            for (Path p : inhalt.toList()) {
+                String name = p.getFileName().toString().toLowerCase(Locale.ROOT);
+                boolean rest = Files.isDirectory(p) ? name.equals(EADIR) || nurReste(p)
+                        : Files.isRegularFile(p) && SYSTEMRESTE.contains(name);
+                if (!rest) {
+                    return false;
+                }
+            }
+            return true;
         }
+    }
+
+    private static boolean inEaDir(Path pfad, Path oberhalb) {
+        for (Path p = pfad; p != null && !p.equals(oberhalb); p = p.getParent()) {
+            if (p.getFileName() != null && p.getFileName().toString().equalsIgnoreCase(EADIR)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Löscht einen Ordner, der nur noch Systemreste enthält, samt diesen Resten. */
+    private static void mitRestenEntfernen(Path ordner, PrintStream ausgabe) throws IOException {
+        List<Path> tiefsteZuerst;
+        try (Stream<Path> alle = Files.walk(ordner)) {
+            tiefsteZuerst = alle.sorted(Comparator.reverseOrder()).toList();
+        }
+        for (Path p : tiefsteZuerst) {
+            boolean datei = Files.isRegularFile(p);
+            Files.delete(p);
+            if (datei) {
+                LOG.info(() -> "Systemrest gelöscht: " + p);
+            }
+        }
+        LOG.info(() -> "Leerer Ordner entfernt: " + ordner);
+        ausgabe.println("leerer Ordner entfernt: " + ordner);
     }
 
     /** Entfernt einen umsortierten Filmordner samt Unterordnern, soweit sie leer sind. */
@@ -325,14 +365,19 @@ public final class Ausfuehrung {
         }
     }
 
-    /** Entfernt leere Ordner bis hinauf zum Ziel, z.B. Staffel-, Serien- und Filmordner. */
+    /**
+     * Entfernt leere Ordner bis hinauf zum Ziel, z.B. Staffel-, Serien- und Filmordner; Ordner mit nur
+     * noch Systemresten samt diesen.
+     */
     private static void leerenOrdnerEntfernen(Path ordner, Path ziel) throws IOException {
         for (Path o = ordner; o != null && !o.equals(ziel) && o.startsWith(ziel); o = o.getParent()) {
-            try {
-                Files.deleteIfExists(o);
-            } catch (DirectoryNotEmptyException e) {
+            if (!Files.isDirectory(o)) {
+                continue;
+            }
+            if (!nurReste(o)) {
                 return; // Ordner enthält noch etwas, bleibt stehen.
             }
+            mitRestenEntfernen(o, new PrintStream(OutputStream.nullOutputStream()));
         }
     }
 

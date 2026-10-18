@@ -6,7 +6,7 @@ Stand: 18.10.2026 · Projekt: `E:\claude\work\film-organizer` (at.mycroft.filmor
 
 1. **Alles lokal.** Das Programm überträgt keine Daten ins Internet: keine Online-Metadaten (TMDb, OMDb o.ä.), keine Telemetrie, keine Update-Prüfung, keine Cloud-Dienste. Es baut keine Netzwerkverbindung auf.
 2. **Nichts ohne Bestätigung.** Jede Änderung im Dateisystem wird zuerst als Vorschau gezeigt und erst nach ausdrücklicher Bestätigung ausgeführt.
-3. **Nichts geht verloren.** Es wird verschoben und umbenannt, keine Datei wird gelöscht. Entfernt werden nur Ordner, die durch das Verschieben leer geworden sind. Doubletten werden in einen Quarantäne-Ordner verschoben, nicht entfernt. Jede Aktion landet in einem Protokoll, mit dem sie rückgängig gemacht werden kann.
+3. **Nichts geht verloren.** Es wird verschoben und umbenannt, keine Datei der Sammlung wird gelöscht. Entfernt werden nur Ordner, die durch das Verschieben leer geworden sind, samt Systemresten darin (`Thumbs.db`, `desktop.ini`, `.DS_Store`, `@eaDir`). Doubletten werden in einen Quarantäne-Ordner verschoben, nicht entfernt. Jede Aktion landet in einem Protokoll, mit dem sie rückgängig gemacht werden kann.
 
 ## 2. Ausgangslage (aus den Beispielen in `F:\Daten-Filmorganizer`)
 
@@ -61,7 +61,7 @@ Stufenweise, damit nicht jede Datei komplett gelesen werden muss:
 - **Fassungen** (entschieden 18.10.2026): Extended, Director's Cut, Final Cut, Unrated und Uncut werden im Namen erkannt. Ohne Angabe oder mit „Kinofassung“/„Theatrical“ gilt die Kinofassung. Eine andere Fassung eines vorhandenen oder im selben Lauf einsortierten Films ist keine Doublette: Es wird nachgefragt, auch wenn sie eine niedrigere Auflösung hat. Bis dahin bleibt sie liegen. Wahlmöglichkeiten in der Spalte „Entscheidung“ bzw. auf der Kommandozeile beim `ausfuehren`: „Beide behalten“ (dann im selben Ordner als `Titel (Jahr) - Extended.<Endung>`, Begleitdateien mit diesem Namen), „In Quarantäne“ oder liegen lassen.
 
 ### 3.4 Neue Struktur
-- Die Filme werden aus den Quellordnern in einen **neuen Zielordner** verschoben (entschieden 18.10.2026). Ordner unter der Quelle, die dadurch ganz leer werden (auch mit leeren Unterordnern), werden danach entfernt (ergänzt 18.10.2026). Die Quelle selbst, Ordner oberhalb der Quelle und Ordner mit Resten (z.B. `Thumbs.db`, `@eaDir`) bleiben stehen. Rückgängig legt die Ordner wieder an.
+- Die Filme werden aus den Quellordnern in einen **neuen Zielordner** verschoben (entschieden 18.10.2026). Ordner unter der Quelle, die dadurch ganz leer werden (auch mit leeren Unterordnern), werden danach entfernt (ergänzt 18.10.2026). Als leer gilt auch ein Ordner, in dem nur noch Systemreste liegen (`Thumbs.db`, `ehthumbs.db`, `desktop.ini`, `.DS_Store`, `@eaDir` der Synology); die Reste werden direkt gelöscht (entschieden 18.10.2026). Die Quelle selbst, Ordner oberhalb der Quelle und Ordner mit anderen Dateien bleiben stehen. Rückgängig legt die Ordner wieder an.
 - Liegt der Zielordner auf einem anderen Laufwerk, wird zuerst kopiert, die Kopie geprüft (Größe und Prüfsumme) und erst dann die Quelldatei entfernt.
 - Vor dem Start wird geprüft, ob auf dem Ziellaufwerk genug Platz ist.
 - Zielschema (entschieden 18.10.2026): `Ziel/Titel (Jahr)/Titel (Jahr).<Endung>`, die Original-Endung bleibt erhalten (`.mkv`, `.mp4` usw.). Dazu `poster.jpg/png` und Untertitel `Titel (Jahr).de.srt`.
