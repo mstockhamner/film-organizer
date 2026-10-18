@@ -1,6 +1,7 @@
 package at.mycroft.filmorganizer;
 
 import at.mycroft.filmorganizer.Aktion.Art;
+import at.mycroft.filmorganizer.Aktion.NeueDatei;
 import at.mycroft.filmorganizer.Aktion.Verschiebung;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -35,6 +36,8 @@ public final class Ausfuehrung {
 
     private static final String PROTOKOLLE = "protokolle";
     static final String BERICHTE = "berichte";
+    /** Kennung im Protokoll für eine vom Programm neu angelegte Datei (z.B. .nfo). */
+    private static final String NEU = "NEU:";
     private static final String ERLEDIGT = ".rueckgaengig";
     // Mit Millisekunden, damit zwei Läufe in derselben Sekunde verschiedene Protokolle bekommen.
     private static final DateTimeFormatter ZEITSTEMPEL = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS");
@@ -100,6 +103,18 @@ public final class Ausfuehrung {
                     verschieben(v.von(), v.nach());
                     LOG.info(() -> "Verschoben: " + v.von() + " -> " + v.nach());
                     schreiber.write(v.von() + "\t" + v.nach());
+                    schreiber.newLine();
+                    schreiber.flush();
+                }
+                for (NeueDatei neu : aktion.neueDateien()) {
+                    if (Files.exists(neu.pfad())) {
+                        LOG.warning(() -> "Nicht angelegt, existiert schon: " + neu.pfad());
+                        continue;
+                    }
+                    Files.createDirectories(neu.pfad().getParent());
+                    Files.writeString(neu.pfad(), neu.inhalt(), StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW);
+                    LOG.info(() -> "Angelegt: " + neu.pfad());
+                    schreiber.write(NEU + "\t" + neu.pfad());
                     schreiber.newLine();
                     schreiber.flush();
                 }
@@ -179,6 +194,15 @@ public final class Ausfuehrung {
         for (String zeile : zeilen) {
             String[] teile = zeile.split("\t");
             if (teile.length != 2) {
+                continue;
+            }
+            if (teile[0].equals(NEU)) {
+                // Vom Programm angelegt (z.B. .nfo): beim Rückgängigmachen wieder entfernen.
+                Path angelegt = Path.of(teile[1]);
+                if (Files.deleteIfExists(angelegt)) {
+                    LOG.info(() -> "Rückgängig: angelegte Datei entfernt: " + angelegt);
+                }
+                leerenOrdnerEntfernen(angelegt.getParent(), ziel);
                 continue;
             }
             Path urspruenglich = Path.of(teile[0]);

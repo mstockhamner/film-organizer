@@ -2,6 +2,7 @@ package at.mycroft.filmorganizer;
 
 import at.mycroft.filmorganizer.Aktion.Art;
 import at.mycroft.filmorganizer.Aktion.Entscheidung;
+import at.mycroft.filmorganizer.Aktion.NeueDatei;
 import at.mycroft.filmorganizer.Aktion.Verschiebung;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -16,6 +17,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
 
@@ -338,6 +340,7 @@ public final class Planer {
      */
     private Aktion ersetzen(Film film, Ersatz ersatz, String hinweis) {
         List<Verschiebung> neu = zielVerschiebungen(film, ersatz.teiltOrdner() || film.info().istFolge());
+        List<NeueDatei> neueDateien = nfo(film, neu);
         Set<Path> weg = new LinkedHashSet<>();
         weg.add(ersatz.video());
         for (Verschiebung v : neu) {
@@ -345,6 +348,8 @@ public final class Planer {
                 weg.add(v.nach());
             }
         }
+        // Eine .nfo der alten Fassung wird durch die neue ersetzt.
+        neueDateien.stream().map(NeueDatei::pfad).filter(Files::isRegularFile).forEach(weg::add);
         List<Verschiebung> verschiebungen = new ArrayList<>();
         for (Path datei : weg) {
             Path nach = inQuarantaene(datei);
@@ -355,7 +360,7 @@ public final class Planer {
             verschiebungen.add(new Verschiebung(datei, nach));
         }
         verschiebungen.addAll(neu);
-        return new Aktion(Art.ERSETZEN, film, verschiebungen, hinweis);
+        return new Aktion(Art.ERSETZEN, film, verschiebungen, hinweis).mitNeuen(neueDateien);
     }
 
     private Path alteDatei(Katalog.Eintrag eintrag) throws IOException {
@@ -382,7 +387,31 @@ public final class Planer {
                 return new Aktion(Art.KONFLIKT, film, List.of(), "Zieldatei existiert schon: " + v.nach());
             }
         }
-        return new Aktion(Art.EINSORTIEREN, film, verschiebungen, "");
+        List<NeueDatei> neueDateien = nfo(film, verschiebungen).stream()
+                .filter(n -> !Files.exists(n.pfad())).toList();
+        return new Aktion(Art.EINSORTIEREN, film, verschiebungen, "").mitNeuen(neueDateien);
+    }
+
+    /**
+     * Eine .nfo aus den Receiver-Daten, wenn der Film eine Sat-Aufnahme mit .meta oder .eit ist und keine
+     * mitgebrachte .nfo denselben Namen bekommt.
+     */
+    private static List<NeueDatei> nfo(Film film, List<Verschiebung> verschiebungen) {
+        Optional<NamensErkennung.Aufnahme> aufnahme =
+                NamensErkennung.erkennenAufnahme(Dateinamen.ohneEndung(film.video().getFileName().toString()));
+        if (aufnahme.isEmpty()) {
+            return List.of();
+        }
+        ReceiverDaten daten = ReceiverDaten.lesen(film.video());
+        if (daten.equals(ReceiverDaten.LEER)) {
+            return List.of();
+        }
+        Path video = verschiebungen.stream().filter(v -> v.von().equals(film.video())).findFirst().orElseThrow().nach();
+        Path pfad = video.resolveSibling(film.info().zielName() + ".nfo");
+        if (verschiebungen.stream().anyMatch(v -> v.nach().equals(pfad))) {
+            return List.of();
+        }
+        return List.of(new NeueDatei(pfad, Nfo.erstellen(film.info(), daten, aufnahme.get().datum())));
     }
 
     /** Video und Begleitdateien mit ihren neuen Pfaden in der Sammlung, ohne Prüfung auf belegte Plätze. */

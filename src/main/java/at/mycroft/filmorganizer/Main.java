@@ -125,6 +125,9 @@ public final class Main {
                 for (Aktion.Verschiebung v : aktion.verschiebungen()) {
                     aus.println("      " + v.von().getFileName() + " -> " + v.nach());
                 }
+                for (Aktion.NeueDatei neu : aktion.neueDateien()) {
+                    aus.println("      neu angelegt: " + neu.pfad());
+                }
             }
         }
         aus.println();

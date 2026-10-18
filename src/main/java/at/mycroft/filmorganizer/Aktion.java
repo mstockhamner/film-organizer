@@ -15,17 +15,32 @@ import java.util.List;
  * @param entscheidung    was bei einer Doublette oder anderen Fassung geschieht
  * @param vorschlag       was das Programm vorschlägt, solange nichts anderes gewählt ist
  * @param auswahl         die Entscheidungen, die für diesen Film möglich sind; leer, wenn es nichts zu entscheiden gibt
+ * @param neueDateien     Dateien, die beim Ausführen neu angelegt werden (z.B. eine .nfo aus den Receiver-Daten)
  */
 public record Aktion(Art art, Film film, List<Verschiebung> verschiebungen, String hinweis,
-        Entscheidung entscheidung, Entscheidung vorschlag, List<Entscheidung> auswahl) {
+        Entscheidung entscheidung, Entscheidung vorschlag, List<Entscheidung> auswahl, List<NeueDatei> neueDateien) {
 
     public Aktion(Art art, Film film, List<Verschiebung> verschiebungen, String hinweis) {
-        this(art, film, verschiebungen, hinweis, Entscheidung.OFFEN, Entscheidung.OFFEN, List.of());
+        this(art, film, verschiebungen, hinweis, Entscheidung.OFFEN, Entscheidung.OFFEN, List.of(), List.of());
+    }
+
+    public Aktion(Art art, Film film, List<Verschiebung> verschiebungen, String hinweis,
+            Entscheidung entscheidung, Entscheidung vorschlag, List<Entscheidung> auswahl) {
+        this(art, film, verschiebungen, hinweis, entscheidung, vorschlag, auswahl, List.of());
     }
 
     /** Dieselbe Aktion mit Entscheidung, Vorschlag und Auswahl. */
     Aktion mit(Entscheidung gewaehlt, Entscheidung vorgeschlagen, List<Entscheidung> moeglich) {
-        return new Aktion(art, film, verschiebungen, hinweis, gewaehlt, vorgeschlagen, moeglich);
+        return new Aktion(art, film, verschiebungen, hinweis, gewaehlt, vorgeschlagen, moeglich, neueDateien);
+    }
+
+    /** Dieselbe Aktion, die zusätzlich diese Dateien neu anlegt. */
+    Aktion mitNeuen(List<NeueDatei> neu) {
+        return new Aktion(art, film, verschiebungen, hinweis, entscheidung, vorschlag, auswahl, neu);
+    }
+
+    /** Eine Datei, die beim Ausführen neu angelegt wird (nie über eine vorhandene). */
+    public record NeueDatei(Path pfad, String inhalt) {
     }
 
     public enum Art {
