@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -114,6 +115,57 @@ public final class Katalog {
         String erster = pfad.getName(0).toString();
         return ZIELORDNER.matcher(erster).matches() || SONDERORDNER.contains(erster.toLowerCase(Locale.ROOT))
                 ? "" : erster;
+    }
+
+    /**
+     * Ordner eines Films der Sammlung.
+     *
+     * @param ordner  {@code Ziel/Titel (Jahr)} oder {@code Ziel/Reihe/Titel (Jahr)}
+     * @param video   die eindeutige Videodatei darin, sonst der Ordner selbst
+     * @param eintrag der Katalogeintrag (bei mehreren Fassungen im Ordner der erste)
+     */
+    public record Filmordner(Path ordner, Path video, Eintrag eintrag) {
+    }
+
+    /** Ein Eintrag pro Filmordner, ohne Serienfolgen, in der Reihenfolge des Katalogs. */
+    public List<Filmordner> filmordner() throws IOException {
+        List<Filmordner> ergebnis = new ArrayList<>();
+        Set<Path> gesehen = new HashSet<>();
+        for (Eintrag e : eintraege) {
+            if (e.info().istFolge()) {
+                continue;
+            }
+            Path pfad = Path.of(e.video());
+            int tiefe = e.info().reihe().isEmpty() ? 1 : 2;
+            if (pfad.getNameCount() < tiefe) {
+                continue;
+            }
+            Path ordner = ziel.resolve(pfad.subpath(0, tiefe));
+            if (Files.isDirectory(ordner) && gesehen.add(ordner)) {
+                Path video = videoDatei(e);
+                ergebnis.add(new Filmordner(ordner, video != null ? video : ordner, e));
+            }
+        }
+        return ergebnis;
+    }
+
+    /**
+     * Videodatei eines Eintrags: die Datei selbst oder, bei einem von Hand angelegten Ordner, die einzige
+     * Videodatei darin. {@code null}, wenn sie nicht eindeutig ist.
+     */
+    public Path videoDatei(Eintrag eintrag) throws IOException {
+        Path pfad = ziel.resolve(eintrag.video());
+        if (Files.isRegularFile(pfad)) {
+            return pfad;
+        }
+        if (!Files.isDirectory(pfad)) {
+            return null;
+        }
+        try (Stream<Path> inhalt = Files.list(pfad)) {
+            List<Path> videos = inhalt.filter(Files::isRegularFile)
+                    .filter(p -> Dateinamen.istVideo(p.getFileName().toString())).toList();
+            return videos.size() == 1 ? videos.get(0) : null;
+        }
     }
 
     /**

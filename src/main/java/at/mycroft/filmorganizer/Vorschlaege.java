@@ -144,6 +144,45 @@ public final class Vorschlaege {
         return anzahl;
     }
 
+    /**
+     * Ein Film der Sammlung für die Verwaltung der Filmreihen.
+     *
+     * @param video Videodatei (oder Filmordner), unter der eine Reihe von Hand gesetzt wird
+     * @param info  Titel, Jahr und die Reihe, in der er jetzt liegt
+     * @param reihe die Reihe, in die er soll: von Hand gesetzt, sonst die jetzige
+     */
+    public record Sammlungsfilm(Path video, FilmInfo info, String reihe) {
+    }
+
+    /** Alle Filme der Sammlung (ohne Serienfolgen), nach Titel sortiert. */
+    public List<Sammlungsfilm> sammlung() throws IOException {
+        List<Sammlungsfilm> filme = new ArrayList<>();
+        for (Katalog.Filmordner f : katalog.filmordner()) {
+            FilmInfo info = f.eintrag().info();
+            filme.add(new Sammlungsfilm(f.video(), info, reihen.getOrDefault(f.video(), info.reihe())));
+        }
+        filme.sort(Comparator.comparing((Sammlungsfilm s) -> s.info().titel(), String.CASE_INSENSITIVE_ORDER)
+                .thenComparingInt(s -> s.info().jahr()));
+        return filme;
+    }
+
+    /**
+     * Gibt allen Filmen der Sammlung in der Reihe {@code alt} die Reihe {@code neu}; leer löst die Reihe
+     * auf. Verschoben wird erst beim Einsortieren.
+     *
+     * @return Anzahl betroffener Filme
+     */
+    public int reiheUmbenennen(String alt, String neu) throws IOException {
+        int anzahl = 0;
+        for (Sammlungsfilm s : sammlung()) {
+            if (!alt.isEmpty() && s.reihe().equalsIgnoreCase(alt)) {
+                reiheSetzen(s.video(), neu);
+                anzahl++;
+            }
+        }
+        return anzahl;
+    }
+
     /** Namen aller Filmreihen, die es in der Sammlung schon gibt. */
     public Set<String> sammlungsReihen() {
         Set<String> reihen = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);

@@ -177,6 +177,21 @@ final class PlanTabelle extends AbstractTableModel {
         return gesetzt;
     }
 
+    Vorschlaege vorschlaege() {
+        return vorschlaege;
+    }
+
+    /** Plant nach Änderungen außerhalb der Tabelle (z.B. im Fenster "Filmreihen verwalten") neu. */
+    void aktualisieren() {
+        try {
+            plan = vorschlaege.plan();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        fireTableDataChanged();
+        nachAenderung.run();
+    }
+
     /** Merkt die von Hand gesetzten Filmreihen dauerhaft, nachdem {@code plan} ausgeführt wurde. */
     void zuordnungenMerken(List<Aktion> ausgefuehrt) throws IOException {
         if (vorschlaege != null) {

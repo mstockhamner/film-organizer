@@ -200,22 +200,19 @@ public final class Planer {
             }
         }
         List<Aktion> aktionen = new ArrayList<>();
-        Set<Path> erledigt = new HashSet<>();
-        for (Katalog.Eintrag e : katalog.eintraege()) {
-            if (e.info().istFolge()) {
-                continue;
-            }
+        for (Katalog.Filmordner f : katalog.filmordner()) {
+            Katalog.Eintrag e = f.eintrag();
             String aktuell = e.info().reihe();
-            Path ordner = filmordner(e);
-            if (ordner == null || !Files.isDirectory(ordner) || belegt.contains(ordner) || !erledigt.add(ordner)) {
+            Path ordner = f.ordner();
+            if (belegt.contains(ordner)) {
                 continue;
             }
-            Path alt = alteDatei(e);
-            Path anzeige = alt != null ? alt : ordner;
+            Path anzeige = f.video();
             String vonHand = vonHand(anzeige, e.info());
             String reihe = vonHand != null ? vonHand
                     : aktuell.isEmpty() ? erkannteReihen.getOrDefault(FilmInfo.normalisieren(e.info().titel()), "") : aktuell;
-            Film film = new Film(anzeige, alt != null ? Files.size(alt) : 0, e.info().mitReihe(reihe), List.of());
+            long groesse = Files.isRegularFile(anzeige) ? Files.size(anzeige) : 0;
+            Film film = new Film(anzeige, groesse, e.info().mitReihe(reihe), List.of());
             if (Dateinamen.bereinigen(reihe).equalsIgnoreCase(aktuell)) {
                 // Bleibt, wo er ist; in der Vorschau sichtbar, wenn dort gerade etwas geändert wurde.
                 if (reihenVorgaben.containsKey(anzeige)) {
@@ -246,12 +243,6 @@ public final class Planer {
         return aktionen;
     }
 
-    /** Ordner eines Films der Sammlung: {@code Ziel/Titel (Jahr)} oder {@code Ziel/Reihe/Titel (Jahr)}. */
-    private Path filmordner(Katalog.Eintrag e) {
-        Path pfad = Path.of(e.video());
-        int tiefe = e.info().reihe().isEmpty() ? 1 : 2;
-        return pfad.getNameCount() < tiefe ? null : ziel.resolve(pfad.subpath(0, tiefe));
-    }
 
     private Aktion gegenSammlung(Film neuerFilm) throws IOException {
         List<Katalog.Eintrag> fassungen = new ArrayList<>(katalog.alle(neuerFilm.info().schluessel()));
@@ -366,23 +357,8 @@ public final class Planer {
         return new Aktion(Art.ERSETZEN, film, verschiebungen, hinweis);
     }
 
-    /**
-     * Videodatei eines Katalogeintrags: die Datei selbst oder, bei einem von Hand angelegten Ordner,
-     * die einzige Videodatei darin. {@code null}, wenn sie nicht eindeutig ist.
-     */
     private Path alteDatei(Katalog.Eintrag eintrag) throws IOException {
-        Path pfad = ziel.resolve(eintrag.video());
-        if (Files.isRegularFile(pfad)) {
-            return pfad;
-        }
-        if (!Files.isDirectory(pfad)) {
-            return null;
-        }
-        try (Stream<Path> inhalt = Files.list(pfad)) {
-            List<Path> videos = inhalt.filter(Files::isRegularFile)
-                    .filter(p -> Dateinamen.istVideo(p.getFileName().toString())).toList();
-            return videos.size() == 1 ? videos.get(0) : null;
-        }
+        return katalog.videoDatei(eintrag);
     }
 
     private static String bezeichnung(FilmInfo info) {

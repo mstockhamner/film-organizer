@@ -67,6 +67,7 @@ public final class Fenster extends JFrame {
     private final JButton einsortieren = new JButton("Einsortieren …");
     private final JButton rueckgaengig = new JButton("Letzten Lauf rückgängig …");
     private final JButton reiheZuweisen = new JButton("Filmreihe zuweisen …");
+    private final JButton reihenVerwalten = new JButton("Filmreihen verwalten …");
     private final JTable ansicht = new JTable();
     private final JLabel status = new JLabel("Quelle und Ziel wählen, dann „Titel einlesen“.");
     private final JProgressBar fortschritt = new JProgressBar();
@@ -84,8 +85,11 @@ public final class Fenster extends JFrame {
         einsortieren.addActionListener(e -> einsortieren());
         rueckgaengig.addActionListener(e -> rueckgaengigMachen());
         reiheZuweisen.addActionListener(e -> reiheZuweisen());
+        reihenVerwalten.addActionListener(e -> new ReihenDialog(this, tabelle.vorschlaege(), tabelle::aktualisieren)
+                .setVisible(true));
         einsortieren.setEnabled(false);
         reiheZuweisen.setEnabled(false);
+        reihenVerwalten.setEnabled(false);
         ansicht.getSelectionModel().addListSelectionListener(e -> reiheZuweisen.setEnabled(ansicht.getSelectedRowCount() > 0));
         tabelle.beiAenderung(this::nachAenderung);
         Log.beiUnerwartetemFehler(fehler -> SwingUtilities.invokeLater(() -> fehlerAnzeigen("Unerwarteter Fehler", fehler)));
@@ -118,6 +122,8 @@ public final class Fenster extends JFrame {
         knoepfe.add(einsortieren);
         knoepfe.add(Box.createHorizontalStrut(24));
         knoepfe.add(reiheZuweisen);
+        knoepfe.add(Box.createHorizontalStrut(8));
+        knoepfe.add(reihenVerwalten);
         knoepfe.add(Box.createHorizontalStrut(24));
         knoepfe.add(rueckgaengig);
         GridBagConstraints c = new GridBagConstraints();
@@ -237,6 +243,7 @@ public final class Fenster extends JFrame {
 
     private void nachAenderung() {
         List<Aktion> plan = tabelle.plan();
+        reihenVerwalten.setEnabled(tabelle.vorschlaege() != null);
         einsortieren.setEnabled(anzahl(plan, Art.EINSORTIEREN) + anzahl(plan, Art.ERSETZEN)
                 + anzahl(plan, Art.UMSORTIEREN) + quarantaene(plan) > 0);
         status.setText(zusammenfassung(plan));
@@ -343,6 +350,7 @@ public final class Fenster extends JFrame {
                             "Rückgängig", JOptionPane.INFORMATION_MESSAGE);
                     tabelle.leeren();
                     einsortieren.setEnabled(false);
+                    reihenVerwalten.setEnabled(false);
                     status.setText(text + " Für neue Vorschläge „Titel einlesen“ klicken.");
                 });
     }
