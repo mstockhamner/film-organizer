@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.logging.Logger;
 import java.util.stream.Stream;
 
 /**
@@ -33,6 +34,8 @@ public final class Ausfuehrung {
     private static final String PROTOKOLLE = "protokolle";
     private static final String ERLEDIGT = ".rueckgaengig";
     private static final DateTimeFormatter ZEITSTEMPEL = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
+
+    private static final Logger LOG = Log.fuer(Ausfuehrung.class);
 
     private Ausfuehrung() {
     }
@@ -67,6 +70,7 @@ public final class Ausfuehrung {
                 }
                 for (Verschiebung v : aktion.verschiebungen()) {
                     verschieben(v.von(), v.nach());
+                    LOG.info(() -> "Verschoben: " + v.von() + " -> " + v.nach());
                     schreiber.write(v.von() + "\t" + v.nach());
                     schreiber.newLine();
                     schreiber.flush();
@@ -113,14 +117,17 @@ public final class Ausfuehrung {
             Path urspruenglich = Path.of(teile[0]);
             Path jetzt = Path.of(teile[1]);
             if (!Files.exists(jetzt)) {
+                LOG.warning(() -> "Rückgängig: Datei fehlt, übersprungen: " + jetzt);
                 ausgabe.println("fehlt, übersprungen: " + jetzt);
                 continue;
             }
             if (Files.exists(urspruenglich)) {
+                LOG.warning(() -> "Rückgängig: ursprünglicher Platz belegt, übersprungen: " + urspruenglich);
                 ausgabe.println("ursprünglicher Platz belegt, übersprungen: " + urspruenglich);
                 continue;
             }
             verschieben(jetzt, urspruenglich);
+            LOG.info(() -> "Zurückverschoben: " + jetzt + " -> " + urspruenglich);
             katalog.entfernen(ziel.relativize(jetzt).toString());
             leerenOrdnerEntfernen(jetzt.getParent(), ziel);
             zurueck++;
@@ -171,8 +178,11 @@ public final class Ausfuehrung {
 
     private static FileStore laufwerk(Path pfad) throws IOException {
         Path vorhanden = pfad.toAbsolutePath();
-        while (!Files.exists(vorhanden)) {
+        while (vorhanden != null && !Files.exists(vorhanden)) {
             vorhanden = vorhanden.getParent();
+        }
+        if (vorhanden == null) {
+            throw new IOException("Laufwerk nicht gefunden: " + pfad);
         }
         return Files.getFileStore(vorhanden);
     }

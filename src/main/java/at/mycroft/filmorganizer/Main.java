@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
+import java.util.logging.Logger;
 
 /**
  * Einstiegspunkt des Filmorganizers. Arbeitet ausschließlich lokal, ohne Netzwerkzugriff.
@@ -23,10 +24,14 @@ import java.util.Locale;
  */
 public final class Main {
 
+    private static final Logger LOG = Log.fuer(Main.class);
+
     private Main() {
     }
 
     public static void main(String[] args) throws IOException {
+        Log.einrichten();
+        LOG.info(() -> "Aufruf: " + (args.length == 0 ? "Oberfläche" : String.join(" ", args)));
         PrintStream aus = System.out;
         if (args.length == 0) {
             Fenster.starten();

@@ -3,6 +3,7 @@ package at.mycroft.filmorganizer.ui;
 import at.mycroft.filmorganizer.Aktion;
 import at.mycroft.filmorganizer.Aktion.Art;
 import at.mycroft.filmorganizer.Ausfuehrung;
+import at.mycroft.filmorganizer.Log;
 import at.mycroft.filmorganizer.Vorschlaege;
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -22,6 +23,8 @@ import java.util.Locale;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.prefs.Preferences;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
@@ -48,6 +51,7 @@ import javax.swing.table.DefaultTableCellRenderer;
  */
 public final class Fenster extends JFrame {
 
+    private static final Logger LOG = Log.fuer(Fenster.class);
     private static final Preferences EINSTELLUNGEN = Preferences.userNodeForPackage(Fenster.class);
 
     private final JTextField quelle = new JTextField(EINSTELLUNGEN.get("quelle", ""), 40);
@@ -72,6 +76,7 @@ public final class Fenster extends JFrame {
         rueckgaengig.addActionListener(e -> rueckgaengigMachen());
         einsortieren.setEnabled(false);
         tabelle.beiAenderung(this::nachAenderung);
+        Log.beiUnerwartetemFehler(fehler -> SwingUtilities.invokeLater(() -> fehlerAnzeigen("Unerwarteter Fehler", fehler)));
 
         setSize(1100, 650);
         setLocationRelativeTo(null);
@@ -191,7 +196,7 @@ public final class Fenster extends JFrame {
             try {
                 tabelle.anzeigen(vorschlaege, q);
             } catch (IOException e) {
-                fehler(e.getMessage());
+                fehlerAnzeigen("Titel einlesen", e);
                 return;
             }
             nachAenderung();
@@ -277,11 +282,11 @@ public final class Fenster extends JFrame {
                 try {
                     danach.accept(get());
                 } catch (ExecutionException e) {
-                    Throwable ursache = e.getCause();
-                    status.setText("Fehler: " + ursache.getMessage());
-                    fehler(ursache.getMessage());
+                    fehlerAnzeigen(meldung, e.getCause());
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
+                } catch (RuntimeException e) {
+                    fehlerAnzeigen(meldung, e);
                 }
             }
         }.execute();
@@ -300,6 +305,13 @@ public final class Fenster extends JFrame {
 
     private static long anzahl(List<Aktion> plan, Art art) {
         return plan.stream().filter(a -> a.art() == art).count();
+    }
+
+    /** Protokolliert den Fehler mit Stacktrace und zeigt ihn mit Hinweis auf das Logfile an. */
+    private void fehlerAnzeigen(String beiAktion, Throwable fehler) {
+        LOG.log(Level.SEVERE, "Fehler bei: " + beiAktion, fehler);
+        status.setText("Fehler: " + Log.beschreibung(fehler));
+        fehler(Log.beschreibung(fehler) + "\n\nDetails stehen im Logfile:\n" + Log.datei());
     }
 
     private void fehler(String text) {
