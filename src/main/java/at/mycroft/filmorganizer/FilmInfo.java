@@ -12,14 +12,24 @@ import java.util.Locale;
  * @param aufloesung vertikale Auflösung in Pixeln (z.B. 1080), 0 wenn unbekannt
  * @param staffel    Staffel einer Serienfolge ({@code S01} = 1), 0 bei Filmen
  * @param folge      Folge innerhalb der Staffel ({@code E02} = 2), 0 bei Filmen
+ * @param fassung    Schnittfassung wie {@code Extended} oder {@code Director's Cut}, leer für die Kinofassung
  */
-public record FilmInfo(String titel, int jahr, int aufloesung, int staffel, int folge) {
+public record FilmInfo(String titel, int jahr, int aufloesung, int staffel, int folge, String fassung) {
 
     /** Unterordner im Ziel, in dem die Serien liegen. */
     static final String SERIEN = "Serien";
 
     public FilmInfo(String titel, int jahr, int aufloesung) {
-        this(titel, jahr, aufloesung, 0, 0);
+        this(titel, jahr, aufloesung, 0, 0, "");
+    }
+
+    public FilmInfo(String titel, int jahr, int aufloesung, int staffel, int folge) {
+        this(titel, jahr, aufloesung, staffel, folge, "");
+    }
+
+    /** Dieselbe Angabe mit einer anderen Fassung. */
+    public FilmInfo mitFassung(String andereFassung) {
+        return new FilmInfo(titel, jahr, aufloesung, staffel, folge, andereFassung);
     }
 
     /** Serienfolge statt Film. */
@@ -33,13 +43,19 @@ public record FilmInfo(String titel, int jahr, int aufloesung, int staffel, int 
     }
 
     /**
-     * Name der Zieldatei ohne Endung: {@code Titel (Jahr)} bei Filmen, {@code Titel - S01E02} bei
-     * Serienfolgen. Bei Filmen heißt auch der Zielordner so.
+     * Name der Zieldatei ohne Endung: {@code Titel (Jahr)} bei Filmen, mit Fassung
+     * {@code Titel (Jahr) - Extended}, und {@code Titel - S01E02} bei Serienfolgen. So können mehrere
+     * Fassungen eines Films im selben Ordner liegen.
      */
     public String zielName() {
-        return istFolge()
-                ? Dateinamen.bereinigen(titel) + " - " + kennung()
-                : Dateinamen.bereinigen(titel) + " (" + jahr + ")";
+        if (istFolge()) {
+            return Dateinamen.bereinigen(titel) + " - " + kennung();
+        }
+        return fassung.isEmpty() ? ordnerName() : ordnerName() + " - " + Dateinamen.bereinigen(fassung);
+    }
+
+    private String ordnerName() {
+        return Dateinamen.bereinigen(titel) + " (" + jahr + ")";
     }
 
     /** {@code Ziel/Titel (Jahr)} bei Filmen, {@code Ziel/Serien/Titel/Staffel 01} bei Serienfolgen. */
@@ -47,7 +63,7 @@ public record FilmInfo(String titel, int jahr, int aufloesung, int staffel, int 
         return istFolge()
                 ? ziel.resolve(SERIEN).resolve(Dateinamen.bereinigen(titel))
                         .resolve(String.format(Locale.ROOT, "Staffel %02d", staffel))
-                : ziel.resolve(zielName());
+                : ziel.resolve(ordnerName());
     }
 
     /**
@@ -59,6 +75,11 @@ public record FilmInfo(String titel, int jahr, int aufloesung, int staffel, int 
         return istFolge()
                 ? normalisieren(titel) + "|" + kennung()
                 : normalisieren(titel) + "|" + jahr;
+    }
+
+    /** Schlüssel für Film und Fassung: Extended und Kinofassung desselben Films sind verschieden. */
+    public String fassungsSchluessel() {
+        return schluessel() + "|" + normalisieren(fassung);
     }
 
     static String normalisieren(String text) {

@@ -1,6 +1,7 @@
 package at.mycroft.filmorganizer.ui;
 
 import at.mycroft.filmorganizer.Aktion;
+import at.mycroft.filmorganizer.Aktion.Entscheidung;
 import at.mycroft.filmorganizer.Vorschlaege;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -21,11 +22,15 @@ final class PlanTabelle extends AbstractTableModel {
     static final int JAHR = 3;
     static final int GEFUNDEN = 4;
     static final int NEUER_ORT = 5;
+    static final int ENTSCHEIDUNG = 6;
 
     static final String IN_QUARANTAENE = "Doublette → Quarantäne";
 
     private static final String[] SPALTEN = {"Übernehmen", "Status", "Titel", "Jahr", "Gefunden in",
-        "Neuer Ort / Hinweis"};
+        "Neuer Ort / Hinweis", "Entscheidung"};
+
+    /** Auswahl in der Spalte Entscheidung, in der Reihenfolge von {@link Entscheidung}. */
+    static final String[] ENTSCHEIDUNGEN = {"bitte wählen", "Beide behalten", "In Quarantäne"};
 
     private Vorschlaege vorschlaege;
     private List<Aktion> plan = List.of();
@@ -84,7 +89,8 @@ final class PlanTabelle extends AbstractTableModel {
 
     @Override
     public boolean isCellEditable(int zeile, int spalte) {
-        return spalte == UEBERNEHMEN || spalte == TITEL || spalte == JAHR;
+        return spalte == UEBERNEHMEN || spalte == TITEL || spalte == JAHR
+                || spalte == ENTSCHEIDUNG && mitEntscheidung(plan.get(zeile));
     }
 
     @Override
@@ -99,6 +105,8 @@ final class PlanTabelle extends AbstractTableModel {
                 yield jahr > 0 ? jahr : null;
             }
             case GEFUNDEN -> relativ(quelle, aktion.film().video());
+            case ENTSCHEIDUNG -> mitEntscheidung(aktion)
+                    ? ENTSCHEIDUNGEN[vorschlaege.entscheidung(aktion.film().video()).ordinal()] : "";
             default -> aktion.art() == Aktion.Art.EINSORTIEREN
                     ? relativ(vorschlaege.ziel(), aktion.verschiebungen().get(0).nach())
                     : aktion.inQuarantaene()
@@ -116,6 +124,8 @@ final class PlanTabelle extends AbstractTableModel {
             case TITEL -> vorschlaege.korrigieren(video, String.valueOf(wert), vorschlaege.jahr(aktion.film()));
             case JAHR -> vorschlaege.korrigieren(video, vorschlaege.titel(aktion.film()),
                     wert instanceof Integer jahr ? jahr : 0);
+            case ENTSCHEIDUNG -> vorschlaege.entscheiden(video,
+                    Entscheidung.values()[Math.max(0, List.of(ENTSCHEIDUNGEN).indexOf(String.valueOf(wert)))]);
             default -> {
                 return;
             }
@@ -127,6 +137,12 @@ final class PlanTabelle extends AbstractTableModel {
         }
         fireTableDataChanged();
         nachAenderung.run();
+    }
+
+    /** Andere Fassung, für die nachgefragt wird, oder eine schon getroffene Entscheidung dazu. */
+    private boolean mitEntscheidung(Aktion aktion) {
+        return aktion.art() == Aktion.Art.FASSUNG
+                || vorschlaege.entscheidung(aktion.film().video()) != Entscheidung.OFFEN;
     }
 
     private String hinweis(Aktion aktion) {
@@ -148,6 +164,7 @@ final class PlanTabelle extends AbstractTableModel {
         return switch (art) {
             case EINSORTIEREN -> "Wird einsortiert";
             case DOUBLETTE -> "Doublette";
+            case FASSUNG -> "Andere Fassung";
             case UNERKANNT -> "Nicht erkannt";
             case KONFLIKT -> "Konflikt";
             case AUSGELASSEN -> "Ausgelassen";

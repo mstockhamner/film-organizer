@@ -1,6 +1,7 @@
 package at.mycroft.filmorganizer;
 
 import at.mycroft.filmorganizer.Aktion.Art;
+import at.mycroft.filmorganizer.Aktion.Entscheidung;
 import at.mycroft.filmorganizer.ui.Fenster;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -8,8 +9,10 @@ import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.logging.Logger;
 
 /**
@@ -60,11 +63,17 @@ public final class Main {
 
     /** Durchsucht die Quelle und erstellt den Plan, ändert nichts. */
     public static List<Aktion> planErstellen(Path quelle, Path ziel) throws IOException {
+        return planErstellen(quelle, ziel, Map.of());
+    }
+
+    /** Wie {@link #planErstellen(Path, Path)}, mit Entscheidungen zu anderen Fassungen. */
+    public static List<Aktion> planErstellen(Path quelle, Path ziel, Map<Path, Entscheidung> entscheidungen)
+            throws IOException {
         if (!Files.isDirectory(quelle)) {
             throw new IOException("Quellordner nicht gefunden: " + quelle);
         }
         List<Film> filme = Scanner.scannen(quelle, ziel);
-        return Planer.planen(filme, Katalog.laden(ziel), ziel);
+        return Planer.planen(filme, Katalog.laden(ziel), ziel, entscheidungen);
     }
 
     static void vorschauAusgeben(List<Aktion> plan, PrintStream aus) {
@@ -97,6 +106,7 @@ public final class Main {
             case EINSORTIEREN -> "Wird einsortiert";
             case DOUBLETTE -> "Doubletten (identische und schlechtere kommen nach " + Planer.QUARANTAENE
                     + ", andere bleiben liegen)";
+            case FASSUNG -> "Andere Fassungen eines vorhandenen Films, Rückfrage beim Ausführen";
             case UNERKANNT -> "Nicht erkannt, bleiben liegen";
             case KONFLIKT -> "Konflikte, bleiben liegen";
             case AUSGELASSEN -> "Ausgelassen, bleiben liegen";
@@ -104,8 +114,13 @@ public final class Main {
     }
 
     private static void ausfuehren(Path quelle, Path ziel, PrintStream aus) throws IOException {
+        BufferedReader ein = new BufferedReader(new InputStreamReader(System.in));
         List<Aktion> plan = planErstellen(quelle, ziel);
         vorschauAusgeben(plan, aus);
+        Map<Path, Entscheidung> entscheidungen = fassungenNachfragen(plan, ein, aus);
+        if (!entscheidungen.isEmpty()) {
+            plan = planErstellen(quelle, ziel, entscheidungen);
+        }
         long anzahl = plan.stream().filter(a -> a.art() == Art.EINSORTIEREN).count();
         long quarantaene = plan.stream().filter(Aktion::inQuarantaene).count();
         if (anzahl == 0 && quarantaene == 0) {
@@ -120,7 +135,7 @@ public final class Main {
         aus.print(anzahl + " Filme einsortieren und " + quarantaene + " Doubletten nach " + Planer.QUARANTAENE
                 + " verschieben? Zum Bestätigen \"ja\" eingeben: ");
         aus.flush();
-        String antwort = new BufferedReader(new InputStreamReader(System.in)).readLine();
+        String antwort = ein.readLine();
         if (antwort == null || !antwort.trim().equalsIgnoreCase("ja")) {
             aus.println("Abgebrochen, nichts verändert.");
             return;
@@ -128,5 +143,31 @@ public final class Main {
         int erledigt = Ausfuehrung.ausfuehren(plan, ziel, aus);
         aus.println(erledigt + " Filme einsortiert, " + quarantaene + " Doubletten in " + Planer.QUARANTAENE
                 + ". Rückgängig mit: rueckgaengig \"" + ziel + "\"");
+    }
+
+    /**
+     * Fragt für jede andere Fassung eines vorhandenen Films nach, ob beide behalten werden, die neue in
+     * die Quarantäne kommt oder liegen bleibt. Liefert nur die getroffenen Entscheidungen.
+     */
+    static Map<Path, Entscheidung> fassungenNachfragen(List<Aktion> plan, BufferedReader ein, PrintStream aus)
+            throws IOException {
+        Map<Path, Entscheidung> entscheidungen = new HashMap<>();
+        for (Aktion aktion : plan) {
+            if (aktion.art() != Art.FASSUNG) {
+                continue;
+            }
+            aus.println(aktion.film().video());
+            aus.println("  " + aktion.hinweis());
+            aus.print("  [b]eide behalten, [q]uarantäne oder [l]iegen lassen? ");
+            aus.flush();
+            String antwort = ein.readLine();
+            String wahl = antwort == null ? "" : antwort.trim().toLowerCase(Locale.ROOT);
+            if (wahl.startsWith("b")) {
+                entscheidungen.put(aktion.film().video(), Entscheidung.BEIDE_BEHALTEN);
+            } else if (wahl.startsWith("q")) {
+                entscheidungen.put(aktion.film().video(), Entscheidung.QUARANTAENE);
+            }
+        }
+        return entscheidungen;
     }
 }

@@ -29,7 +29,9 @@ import java.util.logging.Logger;
 import java.util.prefs.Preferences;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
+import javax.swing.DefaultCellEditor;
 import javax.swing.JButton;
+import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
@@ -142,11 +144,13 @@ public final class Fenster extends JFrame {
         ansicht.setFillsViewportHeight(true);
         ansicht.setRowHeight(ansicht.getRowHeight() + 4);
         ansicht.putClientProperty("terminateEditOnFocusLost", Boolean.TRUE);
-        int[] breiten = {80, 110, 240, 60, 330, 330};
+        int[] breiten = {80, 110, 240, 60, 300, 330, 120};
         for (int spalte = 0; spalte < breiten.length; spalte++) {
             ansicht.getColumnModel().getColumn(spalte).setPreferredWidth(breiten[spalte]);
         }
         ansicht.getColumnModel().getColumn(PlanTabelle.STATUS).setCellRenderer(new StatusDarstellung());
+        ansicht.getColumnModel().getColumn(PlanTabelle.ENTSCHEIDUNG)
+                .setCellEditor(new DefaultCellEditor(new JComboBox<>(PlanTabelle.ENTSCHEIDUNGEN)));
         DefaultTableCellRenderer mitTooltip = new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object wert, boolean ausgewaehlt,
@@ -215,8 +219,12 @@ public final class Fenster extends JFrame {
         Path z = tabelle.ziel();
         long anzahl = anzahl(plan, Art.EINSORTIEREN);
         long quarantaene = quarantaene(plan);
+        long offen = anzahl(plan, Art.FASSUNG);
         int antwort = JOptionPane.showConfirmDialog(this,
                 anzahl + " Filme nach\n" + z + "\nverschieben?\n\n"
+                        + (offen == 0 ? "" : offen + " andere Fassungen (z.B. Extended neben der Kinofassung) sind noch "
+                                + "nicht entschieden und bleiben liegen.\nIn der Spalte „Entscheidung“ lässt sich "
+                                + "„Beide behalten“ oder „In Quarantäne“ wählen.\n\n")
                         + quarantaene + " Doubletten (identisch oder schlechter) kommen nach "
                         + z.resolve(Planer.QUARANTAENE) + ".\n"
                         + "Alles andere (übrige Doubletten, nicht erkannte, ausgelassene Filme, Konflikte) bleibt liegen.\n"
@@ -303,6 +311,7 @@ public final class Fenster extends JFrame {
         }
         return anzahl(plan, Art.EINSORTIEREN) + " werden einsortiert, "
                 + anzahl(plan, Art.DOUBLETTE) + " Doubletten (davon " + quarantaene(plan) + " in Quarantäne), "
+                + anzahl(plan, Art.FASSUNG) + " andere Fassungen zu entscheiden, "
                 + anzahl(plan, Art.UNERKANNT) + " nicht erkannt, "
                 + anzahl(plan, Art.KONFLIKT) + " Konflikte, " + anzahl(plan, Art.AUSGELASSEN) + " ausgelassen. "
                 + "Titel und Jahr lassen sich per Doppelklick ändern. Es wurde noch nichts verändert.";

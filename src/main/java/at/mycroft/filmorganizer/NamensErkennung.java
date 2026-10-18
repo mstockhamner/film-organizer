@@ -30,7 +30,13 @@ public final class NamensErkennung {
             "german", "deutsch", "english", "dl", "ml", "dubbed", "subbed", "ac3", "ac3d", "ac3md", "dts", "dtshd",
             "dd51", "aac", "truehd", "atmos", "bluray", "bd", "bdrip", "brrip", "webrip", "webdl", "hdtv", "dvdrip",
             "dvd", "x264", "x265", "h264", "h265", "hevc", "avc", "xvid", "divx", "remux", "hdr", "uhd", "4k",
-            "extended", "unrated", "uncut", "proper", "repack", "internal", "hd");
+            "extended", "unrated", "uncut", "directors", "kinofassung", "theatrical", "proper", "repack", "internal",
+            "hd");
+
+    /** Schnittfassungen; Kinofassung und Theatrical stehen für die normale Fassung. */
+    private static final Pattern FASSUNG = Pattern.compile(
+            "(?i)(?<![0-9A-Za-z])(extended|unrated|uncut|director'?s cut|directors|final cut|kinofassung|theatrical)"
+                    + "(?![0-9A-Za-z])");
 
     private NamensErkennung() {
     }
@@ -61,7 +67,7 @@ public final class NamensErkennung {
             String davor = kopf.substring(0, jahr.start());
             String titel = aufraeumen(davor);
             if (!titel.isEmpty() && !enthaeltTechnik(davor)) {
-                return Optional.of(new FilmInfo(titel, Integer.parseInt(jahr.group(1)), aufloesung));
+                return Optional.of(new FilmInfo(titel, Integer.parseInt(jahr.group(1)), aufloesung, 0, 0, fassung(text)));
             }
         }
 
@@ -71,7 +77,27 @@ public final class NamensErkennung {
         if (titel.isEmpty()) {
             return Optional.empty();
         }
-        return Optional.of(new FilmInfo(titel, Integer.parseInt(jahr.group(1)), aufloesung));
+        return Optional.of(new FilmInfo(titel, Integer.parseInt(jahr.group(1)), aufloesung, 0, 0, fassung(text)));
+    }
+
+    /**
+     * Schnittfassung aus dem Namen, z.B. {@code Extended} oder {@code Director's Cut}; leer für die
+     * Kinofassung oder wenn nichts angegeben ist.
+     */
+    public static String fassung(String name) {
+        Matcher m = FASSUNG.matcher(vereinfachen(name));
+        if (!m.find()) {
+            return "";
+        }
+        String wort = m.group(1).toLowerCase(Locale.ROOT);
+        return switch (wort.substring(0, 3)) {
+            case "ext" -> "Extended";
+            case "unr" -> "Unrated";
+            case "unc" -> "Uncut";
+            case "dir" -> "Director's Cut";
+            case "fin" -> "Final Cut";
+            default -> "";
+        };
     }
 
     /**

@@ -54,11 +54,32 @@ class PlanTabelleTest {
     }
 
     @Test
+    void entscheidungFuerAndereFassung() throws IOException {
+        Path ziel = quelle.resolve("Sammlung");
+        datei("Blade.Runner.1982.German.2160p/br.mkv");
+        datei("Blade.Runner.1982.Directors.Cut.German.1080p/br-dc.mkv");
+        PlanTabelle tabelle = new PlanTabelle();
+        tabelle.anzeigen(Vorschlaege.einlesen(quelle, ziel), quelle);
+        int dc = 0; // nach Fundort sortiert: "Directors" vor "German"
+        assertEquals("Andere Fassung", tabelle.getValueAt(dc, PlanTabelle.STATUS));
+        assertEquals("bitte wählen", tabelle.getValueAt(dc, PlanTabelle.ENTSCHEIDUNG));
+        assertTrue(tabelle.isCellEditable(dc, PlanTabelle.ENTSCHEIDUNG));
+        assertEquals(false, tabelle.isCellEditable(1, PlanTabelle.ENTSCHEIDUNG));
+
+        tabelle.setValueAt("Beide behalten", dc, PlanTabelle.ENTSCHEIDUNG);
+        assertEquals("Wird einsortiert", tabelle.getValueAt(dc, PlanTabelle.STATUS));
+        assertEquals(Path.of("Blade Runner (1982)", "Blade Runner (1982) - Director's Cut.mkv").toString(),
+                tabelle.getValueAt(dc, PlanTabelle.NEUER_ORT));
+        assertTrue(tabelle.isCellEditable(dc, PlanTabelle.ENTSCHEIDUNG));
+    }
+
+    @Test
     void zusammenfassungZaehltNachArt() {
         Film f = new Film(quelle.resolve("a.mkv"), 1, null, List.of());
         assertEquals("Keine Filme gefunden.", Fenster.zusammenfassung(List.of()));
         assertTrue(Fenster.zusammenfassung(List.of(new Aktion(Art.UNERKANNT, f, List.of(), "")))
-                .startsWith("0 werden einsortiert, 0 Doubletten (davon 0 in Quarantäne), 1 nicht erkannt, "
+                .startsWith("0 werden einsortiert, 0 Doubletten (davon 0 in Quarantäne), "
+                        + "0 andere Fassungen zu entscheiden, 1 nicht erkannt, "
                         + "0 Konflikte, 0 ausgelassen."));
     }
 

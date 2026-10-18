@@ -1,6 +1,7 @@
 package at.mycroft.filmorganizer;
 
 import at.mycroft.filmorganizer.Aktion.Art;
+import at.mycroft.filmorganizer.Aktion.Entscheidung;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -23,6 +24,7 @@ public final class Vorschlaege {
     private final List<Film> gescannt;
     private final Map<Path, Korrektur> korrekturen = new HashMap<>();
     private final Set<Path> ausgelassen = new HashSet<>();
+    private final Map<Path, Entscheidung> entscheidungen = new HashMap<>();
 
     /** Von Hand eingetragener Titel und Jahr; leerer Titel oder Jahr 0 heißt "noch unvollständig". */
     private record Korrektur(String titel, int jahr) {
@@ -65,6 +67,15 @@ public final class Vorschlaege {
         return ausgelassen.contains(video);
     }
 
+    /** Legt fest, was mit einer anderen Fassung eines vorhandenen Films geschieht. */
+    public void entscheiden(Path video, Entscheidung entscheidung) {
+        entscheidungen.put(video, entscheidung);
+    }
+
+    public Entscheidung entscheidung(Path video) {
+        return entscheidungen.getOrDefault(video, Entscheidung.OFFEN);
+    }
+
     /** Aktueller Titel eines Films: Korrektur, sonst Erkennung, sonst leer. */
     public String titel(Film film) {
         Korrektur k = korrekturen.get(film.video());
@@ -92,7 +103,7 @@ public final class Vorschlaege {
                 zuPlanen.add(mitKorrektur(film));
             }
         }
-        aktionen.addAll(Planer.planen(zuPlanen, katalog, ziel));
+        aktionen.addAll(Planer.planen(zuPlanen, katalog, ziel, entscheidungen));
         aktionen.sort(Comparator.comparing(a -> a.film().video()));
         return aktionen;
     }
@@ -110,7 +121,8 @@ public final class Vorschlaege {
                     : NamensErkennung.aufloesung(film.video().getFileName().toString().replace('.', ' '));
             info = folge
                     ? new FilmInfo(k.titel(), k.jahr(), aufloesung, film.info().staffel(), film.info().folge())
-                    : new FilmInfo(k.titel(), k.jahr(), aufloesung);
+                    : new FilmInfo(k.titel(), k.jahr(), aufloesung, 0, 0, film.erkannt() ? film.info().fassung()
+                            : NamensErkennung.fassung(Dateinamen.ohneEndung(film.video().getFileName().toString())));
         }
         return new Film(film.video(), film.groesse(), info, film.begleitdateien());
     }

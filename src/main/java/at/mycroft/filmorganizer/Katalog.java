@@ -49,11 +49,12 @@ public final class Katalog {
         if (Files.exists(datei)) {
             for (String zeile : Files.readAllLines(datei, StandardCharsets.UTF_8)) {
                 String[] teile = zeile.split("\t", -1);
-                // Ältere Kataloge haben noch keine Spalten für Staffel und Folge.
-                if (teile.length == 5 || teile.length == 7) {
+                // Ältere Kataloge haben noch keine Spalten für Staffel, Folge und Fassung.
+                if (teile.length == 5 || teile.length == 7 || teile.length == 8) {
                     FilmInfo info = new FilmInfo(teile[0], Integer.parseInt(teile[1]), Integer.parseInt(teile[2]),
-                            teile.length == 7 ? Integer.parseInt(teile[5]) : 0,
-                            teile.length == 7 ? Integer.parseInt(teile[6]) : 0);
+                            teile.length >= 7 ? Integer.parseInt(teile[5]) : 0,
+                            teile.length >= 7 ? Integer.parseInt(teile[6]) : 0,
+                            teile.length == 8 ? teile[7] : "");
                     eintraege.add(new Eintrag(info, teile[3], Long.parseLong(teile[4])));
                 }
             }
@@ -112,8 +113,13 @@ public final class Katalog {
         return eintraege.stream().filter(e -> e.info().schluessel().equals(schluessel)).findFirst().orElse(null);
     }
 
+    /** Alle Fassungen eines Films in der Sammlung. */
+    public List<Eintrag> alle(String schluessel) {
+        return eintraege.stream().filter(e -> e.info().schluessel().equals(schluessel)).toList();
+    }
+
     public void hinzufuegen(Eintrag eintrag) {
-        eintraege.removeIf(e -> e.info().schluessel().equals(eintrag.info().schluessel()));
+        eintraege.removeIf(e -> e.info().fassungsSchluessel().equals(eintrag.info().fassungsSchluessel()));
         eintraege.add(eintrag);
     }
 
@@ -130,7 +136,7 @@ public final class Katalog {
             if (e.groesse() > 0) {
                 zeilen.add(String.join("\t", e.info().titel(), Integer.toString(e.info().jahr()),
                         Integer.toString(e.info().aufloesung()), e.video(), Long.toString(e.groesse()),
-                        Integer.toString(e.info().staffel()), Integer.toString(e.info().folge())));
+                        Integer.toString(e.info().staffel()), Integer.toString(e.info().folge()), e.info().fassung()));
             }
         }
         Files.write(verzeichnis.resolve(DATEI), zeilen, StandardCharsets.UTF_8);

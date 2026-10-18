@@ -1,6 +1,7 @@
 package at.mycroft.filmorganizer;
 
 import at.mycroft.filmorganizer.Aktion.Art;
+import at.mycroft.filmorganizer.Aktion.Entscheidung;
 import at.mycroft.filmorganizer.Aktion.Verschiebung;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -39,26 +40,37 @@ public final class Planer {
     private final Katalog katalog;
     private final Map<Path, String> pruefsummen = new HashMap<>();
 
-    private Planer(Path ziel, Katalog katalog) {
+    private final Map<Path, Entscheidung> entscheidungen;
+    /** In diesem Lauf zum Einsortieren vorgesehene Filme, damit weitere Fassungen sie als vorhanden sehen. */
+    private final List<Katalog.Eintrag> eingeplant = new ArrayList<>();
+
+    private Planer(Path ziel, Katalog katalog, Map<Path, Entscheidung> entscheidungen) {
         this.ziel = ziel;
         this.quarantaene = ziel.resolve(QUARANTAENE).resolve(LocalDate.now().toString());
         this.katalog = katalog;
+        this.entscheidungen = entscheidungen;
     }
 
     public static List<Aktion> planen(List<Film> filme, Katalog katalog, Path ziel) throws IOException {
-        return new Planer(ziel, katalog).planen(filme);
+        return planen(filme, katalog, ziel, Map.of());
+    }
+
+    /** Wie {@link #planen(List, Katalog, Path)}, mit den Entscheidungen zu anderen Fassungen je Videodatei. */
+    public static List<Aktion> planen(List<Film> filme, Katalog katalog, Path ziel,
+            Map<Path, Entscheidung> entscheidungen) throws IOException {
+        return new Planer(ziel, katalog, entscheidungen).planen(filme);
     }
 
     private List<Aktion> planen(List<Film> filme) throws IOException {
         List<Aktion> aktionen = new ArrayList<>();
 
-        // 1. Doubletten innerhalb des Imports: gleicher Titel und gleiches Jahr.
+        // 1. Doubletten innerhalb des Imports: gleicher Titel, gleiches Jahr und gleiche Fassung.
         Map<String, List<Film>> nachSchluessel = new LinkedHashMap<>();
         for (Film film : filme) {
             if (!film.erkannt()) {
                 aktionen.add(new Aktion(Art.UNERKANNT, film, List.of(), "Titel und Jahr nicht erkennbar"));
             } else {
-                nachSchluessel.computeIfAbsent(film.info().schluessel(), k -> new ArrayList<>()).add(film);
+                nachSchluessel.computeIfAbsent(film.info().fassungsSchluessel(), k -> new ArrayList<>()).add(film);
             }
         }
         List<Film> kandidaten = new ArrayList<>();
@@ -91,15 +103,26 @@ public final class Planer {
             }
         }
 
-        // 3. Abgleich mit der bestehenden Sammlung und Zielpfade festlegen.
+        // 3. Abgleich mit der bestehenden Sammlung und Zielpfade festlegen. Die bessere Fassung zuerst,
+        //    damit sie einsortiert wird und weitere Fassungen desselben Films nachgefragt werden.
+        eindeutig.sort(BESSER_ZUERST);
         for (Film film : eindeutig) {
-            aktionen.add(gegenSammlung(film));
+            Aktion aktion = gegenSammlung(film);
+            if (aktion.art() == Art.EINSORTIEREN) {
+                eingeplant.add(new Katalog.Eintrag(film.info(),
+                        ziel.relativize(aktion.verschiebungen().get(0).nach()).toString(), film.groesse()));
+            }
+            aktionen.add(aktion);
         }
         return aktionen;
     }
 
     private Aktion gegenSammlung(Film film) throws IOException {
-        Katalog.Eintrag vorhanden = katalog.finden(film.info().schluessel());
+        List<Katalog.Eintrag> fassungen = new ArrayList<>(katalog.alle(film.info().schluessel()));
+        eingeplant.stream().filter(e -> e.info().schluessel().equals(film.info().schluessel())).forEach(fassungen::add);
+        Katalog.Eintrag vorhanden = fassungen.stream()
+                .filter(e -> e.info().fassungsSchluessel().equals(film.info().fassungsSchluessel()))
+                .findFirst().orElse(null);
         if (vorhanden != null) {
             if (identisch(film, vorhanden)) {
                 return quarantaene(film, "identische Datei schon in der Sammlung: " + vorhanden.video());
@@ -115,17 +138,38 @@ public final class Planer {
                 return quarantaene(film, "identische Datei schon in der Sammlung: " + eintrag.video());
             }
         }
+        if (!fassungen.isEmpty()) {
+            Katalog.Eintrag andere = fassungen.get(0);
+            String hinweis = "andere Fassung (" + bezeichnung(film.info()) + ") von " + andere.video()
+                    + " (" + bezeichnung(andere.info()) + ")";
+            return switch (entscheidungen.getOrDefault(film.video(), Entscheidung.OFFEN)) {
+                case OFFEN -> new Aktion(Art.FASSUNG, film, List.of(), hinweis + ", bitte entscheiden");
+                case QUARANTAENE -> quarantaene(film, hinweis);
+                case BEIDE_BEHALTEN -> einsortieren(film, true);
+            };
+        }
+        return einsortieren(film, false);
+    }
 
+    private static String bezeichnung(FilmInfo info) {
+        return info.fassung().isEmpty() ? "Kinofassung" : info.fassung();
+    }
+
+    /**
+     * Plant das Verschieben in die Sammlung. Ein Film bekommt einen eigenen Ordner; Serienfolgen und
+     * weitere Fassungen eines Films teilen sich einen Ordner ({@code teiltOrdner}).
+     */
+    private Aktion einsortieren(Film film, boolean teiltOrdner) {
         String name = film.info().zielName();
         Path ordner = film.info().zielOrdner(ziel);
-        // Ein Film bekommt einen eigenen Ordner; Folgen teilen sich den Staffelordner.
-        if (!film.info().istFolge() && Files.exists(ordner)) {
+        boolean gemeinsam = teiltOrdner || film.info().istFolge();
+        if (!gemeinsam && Files.exists(ordner)) {
             return new Aktion(Art.KONFLIKT, film, List.of(), "Zielordner existiert schon: " + ordner);
         }
         List<Verschiebung> verschiebungen = new ArrayList<>();
         String endung = Dateinamen.endung(film.video().getFileName().toString());
         verschiebungen.add(new Verschiebung(film.video(), ordner.resolve(name + "." + endung)));
-        for (Map.Entry<Path, String> begleit : begleitNamen(film, name).entrySet()) {
+        for (Map.Entry<Path, String> begleit : begleitNamen(film, name, gemeinsam).entrySet()) {
             verschiebungen.add(new Verschiebung(begleit.getKey(), ordner.resolve(begleit.getValue())));
         }
         for (Verschiebung v : verschiebungen) {
@@ -211,24 +255,23 @@ public final class Planer {
     /**
      * Neue Namen der Begleitdateien: ein einzelnes Bild wird {@code poster.<endung>}, Untertitel und
      * .nfo heißen wie der Film (eine Sprachkennung wie {@code .de} bleibt erhalten). Was sich nicht
-     * eindeutig benennen lässt, behält seinen Namen. Bei Serienfolgen liegen mehrere Folgen im selben
-     * Staffelordner, deshalb tragen dort alle Begleitdateien den Namen der Folge, ein einzelnes Bild
+     * eindeutig benennen lässt, behält seinen Namen. Teilen sich mehrere Videos einen Ordner (Folgen einer
+     * Staffel, Fassungen eines Films), tragen alle Begleitdateien den Namen des Videos, ein einzelnes Bild
      * also {@code Titel - S01E02.jpg} und andere {@code Titel - S01E02 - <alter Name>}.
      */
-    static Map<Path, String> begleitNamen(Film film, String name) {
+    static Map<Path, String> begleitNamen(Film film, String name, boolean teiltOrdner) {
         Map<Path, String> ergebnis = new LinkedHashMap<>();
         Set<String> vergeben = new HashSet<>();
         vergeben.add((name + "." + Dateinamen.endung(film.video().getFileName().toString())).toLowerCase(Locale.ROOT));
-        boolean folge = film.info().istFolge();
         long bilder = film.begleitdateien().stream()
                 .filter(p -> Dateinamen.BILD.contains(Dateinamen.endung(p.getFileName().toString())))
                 .count();
         for (Path datei : film.begleitdateien()) {
-            String original = folge ? name + " - " + datei.getFileName() : datei.getFileName().toString();
+            String original = teiltOrdner ? name + " - " + datei.getFileName() : datei.getFileName().toString();
             String endung = Dateinamen.endung(original);
             String wunsch;
             if (Dateinamen.BILD.contains(endung)) {
-                wunsch = bilder != 1 ? original : folge ? name + "." + endung : "poster." + endung;
+                wunsch = bilder != 1 ? original : teiltOrdner ? name + "." + endung : "poster." + endung;
             } else if (Dateinamen.UNTERTITEL.contains(endung)) {
                 String sprache = sprachkennung(original);
                 wunsch = name + (sprache.isEmpty() ? "" : "." + sprache) + "." + endung;

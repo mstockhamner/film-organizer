@@ -136,12 +136,13 @@ public final class Scanner {
         return new FilmInfo(serie.titel(), serie.jahr(), aufloesung, nummer.staffel(), nummer.folge());
     }
 
+    /** Auflösung und Fassung, die im Ordnernamen fehlen, stehen oft im Dateinamen. */
     private static FilmInfo mitAufloesungAusDatei(FilmInfo info, Path video) {
-        if (info.aufloesung() != 0) {
-            return info;
-        }
-        int ausDatei = NamensErkennung.aufloesung(video.getFileName().toString().replace('.', ' '));
-        return new FilmInfo(info.titel(), info.jahr(), ausDatei);
+        String datei = video.getFileName().toString();
+        int aufloesung = info.aufloesung() != 0 ? info.aufloesung()
+                : NamensErkennung.aufloesung(datei.replace('.', ' '));
+        String fassung = !info.fassung().isEmpty() ? info.fassung() : NamensErkennung.fassung(Dateinamen.ohneEndung(datei));
+        return new FilmInfo(info.titel(), info.jahr(), aufloesung, 0, 0, fassung);
     }
 
     /**
