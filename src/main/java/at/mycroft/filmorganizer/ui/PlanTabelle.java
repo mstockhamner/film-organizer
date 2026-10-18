@@ -177,6 +177,11 @@ final class PlanTabelle extends AbstractTableModel {
         return gesetzt;
     }
 
+    /** Quelle, aus der die angezeigten Filme eingelesen wurden. */
+    Path quelle() {
+        return quelle;
+    }
+
     Vorschlaege vorschlaege() {
         return vorschlaege;
     }

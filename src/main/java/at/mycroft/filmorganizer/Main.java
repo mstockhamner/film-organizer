@@ -178,7 +178,7 @@ public final class Main {
             aus.println("Abgebrochen, nichts verändert.");
             return;
         }
-        int erledigt = Ausfuehrung.ausfuehren(plan, ziel, aus);
+        int erledigt = Ausfuehrung.ausfuehren(plan, quelle, ziel, aus);
         aus.println(erledigt + " Filme einsortiert oder ersetzt, " + quarantaene + " Doubletten in " + Planer.QUARANTAENE
                 + ". Rückgängig mit: rueckgaengig \"" + ziel + "\"");
     }

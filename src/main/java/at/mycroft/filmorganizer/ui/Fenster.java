@@ -316,7 +316,7 @@ public final class Fenster extends JFrame {
                 throw new IllegalStateException(String.format(Locale.ROOT,
                         "Auf dem Ziellaufwerk fehlen %.1f GB. Es wurde nichts verschoben.", fehlt / 1e9));
             }
-            int erledigt = Ausfuehrung.ausfuehren(plan, z, stilleAusgabe());
+            int erledigt = Ausfuehrung.ausfuehren(plan, tabelle.quelle(), z, stilleAusgabe());
             tabelle.zuordnungenMerken(plan);
             return erledigt;
         }, erledigt -> {

@@ -18,7 +18,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.logging.Logger;
 import java.util.stream.Stream;
 
@@ -61,7 +63,23 @@ public final class Ausfuehrung {
      * verschiebt Doubletten in die Quarantäne und gibt die Anzahl einsortierter Filme zurück (ersetzte
      * mitgezählt, umsortierte nicht). Gibt es
      * Doubletten oder andere Fassungen, wird zusätzlich ein Doublettenbericht geschrieben.
+     *
+     * <p>Ordner unter {@code quelle}, die durch das Verschieben leer geworden sind, werden danach entfernt,
+     * die Quelle selbst nicht. Ordner, in denen noch etwas liegt (auch nur {@code Thumbs.db}), bleiben.
      */
+    public static int ausfuehren(List<Aktion> plan, Path quelle, Path ziel, PrintStream ausgabe) throws IOException {
+        Set<Path> herkunft = new LinkedHashSet<>();
+        for (Aktion aktion : plan) {
+            if (aktion.art() == Art.EINSORTIEREN || aktion.art() == Art.ERSETZEN || aktion.inQuarantaene()) {
+                aktion.verschiebungen().forEach(v -> herkunft.add(v.von().toAbsolutePath().normalize().getParent()));
+            }
+        }
+        int filme = ausfuehren(plan, ziel, ausgabe);
+        leereQuellordnerEntfernen(herkunft, quelle, ziel, ausgabe);
+        return filme;
+    }
+
+    /** Wie {@link #ausfuehren(List, Path, Path, PrintStream)}, ohne leere Quellordner zu entfernen. */
     public static int ausfuehren(List<Aktion> plan, Path ziel, PrintStream ausgabe) throws IOException {
         Files.createDirectories(ziel);
         Katalog katalog = Katalog.laden(ziel);
@@ -212,6 +230,57 @@ public final class Ausfuehrung {
         }
         Files.move(teil, nach);
         Files.delete(von);
+    }
+
+    /**
+     * Entfernt leere Ordner, aus denen etwas verschoben wurde: zuerst leere Unterordner darin, dann den
+     * Ordner selbst und seine Elternordner, solange sie leer sind. Grenze ist die Quelle (bzw. das Ziel,
+     * wenn der Ordner darin liegt); Quelle, Ziel und Ordner außerhalb der Quelle bleiben immer stehen.
+     */
+    static void leereQuellordnerEntfernen(Set<Path> ordner, Path quelle, Path ziel, PrintStream ausgabe)
+            throws IOException {
+        Path quelleAbs = quelle.toAbsolutePath().normalize();
+        Path zielAbs = ziel.toAbsolutePath().normalize();
+        for (Path start : ordner) {
+            Path grenze = start.startsWith(zielAbs) ? zielAbs : quelleAbs;
+            if (!start.startsWith(grenze) || start.equals(grenze)) {
+                continue;
+            }
+            if (Files.isDirectory(start)) {
+                leereUnterordnerEntfernen(start, zielAbs, ausgabe);
+            }
+            for (Path o = start; o != null && o.startsWith(grenze) && !o.equals(grenze) && !o.equals(zielAbs);
+                    o = o.getParent()) {
+                if (!Files.isDirectory(o) || !leer(o)) {
+                    break;
+                }
+                Files.delete(o);
+                Path entfernt = o;
+                LOG.info(() -> "Leerer Ordner entfernt: " + entfernt);
+                ausgabe.println("leerer Ordner entfernt: " + o);
+            }
+        }
+    }
+
+    private static void leereUnterordnerEntfernen(Path ordner, Path zielAbs, PrintStream ausgabe) throws IOException {
+        List<Path> tiefsteZuerst;
+        try (Stream<Path> alle = Files.walk(ordner)) {
+            tiefsteZuerst = alle.filter(Files::isDirectory).filter(o -> !o.equals(ordner) && !o.startsWith(zielAbs))
+                    .sorted(Comparator.reverseOrder()).toList();
+        }
+        for (Path o : tiefsteZuerst) {
+            if (leer(o)) {
+                Files.delete(o);
+                LOG.info(() -> "Leerer Ordner entfernt: " + o);
+                ausgabe.println("leerer Ordner entfernt: " + o);
+            }
+        }
+    }
+
+    private static boolean leer(Path ordner) throws IOException {
+        try (Stream<Path> inhalt = Files.list(ordner)) {
+            return inhalt.findAny().isEmpty();
+        }
     }
 
     /** Entfernt einen umsortierten Filmordner samt Unterordnern, soweit sie leer sind. */
