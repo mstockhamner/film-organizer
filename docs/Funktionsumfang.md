@@ -53,8 +53,8 @@ Stufenweise, damit nicht jede Datei komplett gelesen werden muss:
 - Ein Befehl macht die letzte Ausführung vollständig rückgängig.
 
 ### 3.6 Bedienung
-- Erste Version als Kommandozeilenprogramm: `scan`, `duplikate`, `vorschau`, `ausfuehren`, `rueckgaengig`.
-- Eine grafische Oberfläche (z.B. JavaFX) ist eine mögliche spätere Ausbaustufe.
+- **Oberfläche** (Java Swing, ohne zusätzliche Bibliotheken): Quelle und Ziel wählen, Vorschau als Tabelle ansehen, nach Bestätigung einsortieren, letzten Lauf rückgängig machen. Start per Doppelklick auf `Filmorganizer.bat` oder `java -jar` ohne Argumente. Die zuletzt gewählten Ordner merkt sich das Programm lokal.
+- **Kommandozeile** für dieselben Funktionen: `vorschau`, `ausfuehren`, `rueckgaengig`.
 
 ## 4. Nicht im Umfang (erste Version)
 - Online-Metadaten, Poster-Download, Bewertungen

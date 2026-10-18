@@ -1,6 +1,7 @@
 package at.mycroft.filmorganizer;
 
 import at.mycroft.filmorganizer.Aktion.Art;
+import at.mycroft.filmorganizer.ui.Fenster;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -12,6 +13,7 @@ import java.util.Locale;
 
 /**
  * Einstiegspunkt des Filmorganizers. Arbeitet ausschließlich lokal, ohne Netzwerkzugriff.
+ * Ohne Argumente startet die Oberfläche, mit Argumenten die Kommandozeile:
  *
  * <pre>
  * vorschau     &lt;quelle&gt; &lt;ziel&gt;   zeigt, was passieren würde, ändert nichts
@@ -26,7 +28,9 @@ public final class Main {
 
     public static void main(String[] args) throws IOException {
         PrintStream aus = System.out;
-        if (args.length == 3 && args[0].equals("vorschau")) {
+        if (args.length == 0) {
+            Fenster.starten();
+        } else if (args.length == 3 && args[0].equals("vorschau")) {
             vorschauAusgeben(planErstellen(Path.of(args[1]), Path.of(args[2])), aus);
         } else if (args.length == 3 && args[0].equals("ausfuehren")) {
             ausfuehren(Path.of(args[1]), Path.of(args[2]), aus);
@@ -42,6 +46,7 @@ public final class Main {
         return """
                 Filmorganizer
 
+                  (ohne Argumente)               startet die Oberfläche
                   vorschau     <quelle> <ziel>   zeigt, was passieren würde, ändert nichts
                   ausfuehren   <quelle> <ziel>   zeigt die Vorschau und verschiebt nach Bestätigung
                   rueckgaengig <ziel>            macht den letzten Lauf rückgängig
