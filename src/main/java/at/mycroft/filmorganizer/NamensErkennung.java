@@ -20,6 +20,10 @@ public final class NamensErkennung {
     private static final Pattern AUFLOESUNG = Pattern.compile(
             "(?i)(?<![0-9A-Za-z])(?:(480|576|720|1080|2160)[pi]|(4k|uhd))(?![0-9A-Za-z])");
     private static final Pattern WORT = Pattern.compile("[0-9A-Za-zÄÖÜäöüß]+");
+    private static final Pattern FOLGE = Pattern.compile("(?i)(?<![0-9A-Za-z])S([0-9]{1,2}) ?E([0-9]{1,3})(?![0-9])");
+    private static final Pattern STAFFEL = Pattern.compile(
+            "(?i)(?<![0-9A-Za-z])(?:S|Staffel |Season )([0-9]{1,2})(?![0-9A-Za-z])");
+    private static final Pattern TITEL_JAHR = Pattern.compile("^(.+) ((?:19|20)[0-9]{2})$");
 
     /** Angaben zu Sprache, Ton, Quelle und Codec, die nicht zum Titel gehören. */
     private static final Set<String> TECHNIK = Set.of(
@@ -36,7 +40,7 @@ public final class NamensErkennung {
      * Zielschema {@code Titel (Jahr)} das Jahr braucht.
      */
     public static Optional<FilmInfo> erkennen(String name) {
-        String text = name.replaceAll("[._]", " ").replaceAll("\\s+", " ").trim();
+        String text = vereinfachen(name);
         int aufloesung = aufloesung(text);
 
         // Alles ab der Auflösungsangabe ist Technik, auch ein Gruppenname wie "x264-GRUPPE2020".
@@ -68,6 +72,49 @@ public final class NamensErkennung {
             return Optional.empty();
         }
         return Optional.of(new FilmInfo(titel, Integer.parseInt(jahr.group(1)), aufloesung));
+    }
+
+    /**
+     * Erkennt Serienangaben: eine Folge wie {@code Breaking.Bad.S01E02.German.1080p} oder einen
+     * Staffelordner wie {@code Breaking.Bad.S01.German.1080p} bzw. {@code Staffel 1} (dann ist die
+     * Folge 0). Der Serientitel steht vor der Kennung und ist leer, wenn dort nichts steht. Eine
+     * Jahreszahl am Ende des Titels wird als Jahr abgetrennt ({@code Doctor.Who.2005.S01E01}).
+     */
+    public static Optional<FilmInfo> erkennenSerie(String name) {
+        String text = vereinfachen(name);
+        Matcher folge = FOLGE.matcher(text);
+        if (folge.find()) {
+            return Optional.of(serie(text.substring(0, folge.start()), aufloesung(text),
+                    Integer.parseInt(folge.group(1)), Integer.parseInt(folge.group(2))));
+        }
+        Matcher staffel = STAFFEL.matcher(text);
+        if (staffel.find()) {
+            return Optional.of(serie(text.substring(0, staffel.start()), aufloesung(text),
+                    Integer.parseInt(staffel.group(1)), 0));
+        }
+        return Optional.empty();
+    }
+
+    /** Serientitel aus einem Namen ohne Kennung, z.B. dem Ordner {@code Breaking.Bad.German.1080p}. */
+    public static FilmInfo serienTitel(String name) {
+        String text = vereinfachen(name);
+        Matcher aufl = AUFLOESUNG.matcher(text);
+        return serie(aufl.find() ? text.substring(0, aufl.start()) : text, aufloesung(text), 0, 0);
+    }
+
+    private static FilmInfo serie(String davor, int aufloesung, int staffel, int folge) {
+        String titel = aufraeumen(bisZurTechnik(davor));
+        int jahr = 0;
+        Matcher m = TITEL_JAHR.matcher(titel);
+        if (m.matches()) {
+            titel = aufraeumen(m.group(1));
+            jahr = Integer.parseInt(m.group(2));
+        }
+        return new FilmInfo(titel, jahr, aufloesung, staffel, folge);
+    }
+
+    private static String vereinfachen(String name) {
+        return name.replaceAll("[._]", " ").replaceAll("\\s+", " ").trim();
     }
 
     /** Vertikale Auflösung aus dem Namen, 0 wenn keine angegeben ist. */

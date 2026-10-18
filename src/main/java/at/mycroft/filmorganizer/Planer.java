@@ -96,8 +96,9 @@ public final class Planer {
         }
 
         String name = film.info().zielName();
-        Path ordner = ziel.resolve(name);
-        if (Files.exists(ordner)) {
+        Path ordner = film.info().zielOrdner(ziel);
+        // Ein Film bekommt einen eigenen Ordner; Folgen teilen sich den Staffelordner.
+        if (!film.info().istFolge() && Files.exists(ordner)) {
             return new Aktion(Art.KONFLIKT, film, List.of(), "Zielordner existiert schon: " + ordner);
         }
         List<Verschiebung> verschiebungen = new ArrayList<>();
@@ -105,6 +106,11 @@ public final class Planer {
         verschiebungen.add(new Verschiebung(film.video(), ordner.resolve(name + "." + endung)));
         for (Map.Entry<Path, String> begleit : begleitNamen(film, name).entrySet()) {
             verschiebungen.add(new Verschiebung(begleit.getKey(), ordner.resolve(begleit.getValue())));
+        }
+        for (Verschiebung v : verschiebungen) {
+            if (Files.exists(v.nach())) {
+                return new Aktion(Art.KONFLIKT, film, List.of(), "Zieldatei existiert schon: " + v.nach());
+            }
         }
         return new Aktion(Art.EINSORTIEREN, film, verschiebungen, "");
     }
@@ -147,21 +153,24 @@ public final class Planer {
     /**
      * Neue Namen der Begleitdateien: ein einzelnes Bild wird {@code poster.<endung>}, Untertitel und
      * .nfo heißen wie der Film (eine Sprachkennung wie {@code .de} bleibt erhalten). Was sich nicht
-     * eindeutig benennen lässt, behält seinen Namen.
+     * eindeutig benennen lässt, behält seinen Namen. Bei Serienfolgen liegen mehrere Folgen im selben
+     * Staffelordner, deshalb tragen dort alle Begleitdateien den Namen der Folge, ein einzelnes Bild
+     * also {@code Titel - S01E02.jpg} und andere {@code Titel - S01E02 - <alter Name>}.
      */
     static Map<Path, String> begleitNamen(Film film, String name) {
         Map<Path, String> ergebnis = new LinkedHashMap<>();
         Set<String> vergeben = new HashSet<>();
         vergeben.add((name + "." + Dateinamen.endung(film.video().getFileName().toString())).toLowerCase(Locale.ROOT));
+        boolean folge = film.info().istFolge();
         long bilder = film.begleitdateien().stream()
                 .filter(p -> Dateinamen.BILD.contains(Dateinamen.endung(p.getFileName().toString())))
                 .count();
         for (Path datei : film.begleitdateien()) {
-            String original = datei.getFileName().toString();
+            String original = folge ? name + " - " + datei.getFileName() : datei.getFileName().toString();
             String endung = Dateinamen.endung(original);
             String wunsch;
             if (Dateinamen.BILD.contains(endung)) {
-                wunsch = bilder == 1 ? "poster." + endung : original;
+                wunsch = bilder != 1 ? original : folge ? name + "." + endung : "poster." + endung;
             } else if (Dateinamen.UNTERTITEL.contains(endung)) {
                 String sprache = sprachkennung(original);
                 wunsch = name + (sprache.isEmpty() ? "" : "." + sprache) + "." + endung;

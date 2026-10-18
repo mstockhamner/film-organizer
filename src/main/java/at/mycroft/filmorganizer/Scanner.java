@@ -72,6 +72,10 @@ public final class Scanner {
      * trägt ({@code lhd-kater-1080p.mkv}). Gesucht wird vom nächsten Ordner nach oben bis zur Quelle.
      */
     static FilmInfo erkennen(Path video, Path quelle) {
+        FilmInfo folge = folgeErkennen(video, quelle);
+        if (folge != null) {
+            return folge;
+        }
         for (Path ordner = video.getParent(); ordner != null && ordner.startsWith(quelle); ordner = ordner.getParent()) {
             if (ordner.getFileName() == null) {
                 break; // Laufwerkswurzel wie F:\ hat keinen Namen
@@ -86,6 +90,50 @@ public final class Scanner {
             LOG.fine(() -> "Titel und Jahr nicht erkannt: " + video);
         }
         return ausDatei;
+    }
+
+    /**
+     * Serienfolge, wenn der Datei- oder ein Ordnername eine Kennung wie {@code S01E02} trägt, sonst
+     * {@code null}. Staffel und Folge kommen zuerst aus dem Dateinamen, weil in einem Staffelordner
+     * viele Folgen liegen. Der Serientitel kommt bevorzugt aus einem Ordner mit Kennung
+     * ({@code Breaking.Bad.S01.German.1080p}), sonst aus dem Dateinamen, sonst aus dem Ordner über
+     * einem reinen Staffelordner ({@code Breaking Bad/Staffel 1/s01e02.mkv}).
+     */
+    static FilmInfo folgeErkennen(Path video, Path quelle) {
+        FilmInfo nummer = NamensErkennung.erkennenSerie(Dateinamen.ohneEndung(name(video)))
+                .filter(FilmInfo::istFolge).orElse(null);
+        List<FilmInfo> ausOrdnern = new ArrayList<>();
+        FilmInfo ersatz = null;
+        for (Path ordner = video.getParent(); ordner != null && ordner.startsWith(quelle); ordner = ordner.getParent()) {
+            if (ordner.getFileName() == null) {
+                break;
+            }
+            String ordnerName = ordner.getFileName().toString();
+            Optional<FilmInfo> serie = NamensErkennung.erkennenSerie(ordnerName);
+            if (serie.isPresent()) {
+                if (nummer == null && serie.get().istFolge()) {
+                    nummer = serie.get();
+                }
+                ausOrdnern.add(serie.get());
+            } else if (ersatz == null && !ordner.equals(quelle)
+                    && ausOrdnern.stream().allMatch(s -> s.titel().isEmpty())) {
+                ersatz = NamensErkennung.serienTitel(ordnerName);
+            }
+        }
+        if (nummer == null) {
+            return null;
+        }
+        List<FilmInfo> kandidaten = new ArrayList<>(ausOrdnern);
+        kandidaten.add(nummer);
+        if (ersatz != null) {
+            kandidaten.add(ersatz);
+        }
+        FilmInfo serie = kandidaten.stream().filter(s -> !s.titel().isEmpty()).findFirst().orElse(null);
+        if (serie == null) {
+            return null;
+        }
+        int aufloesung = nummer.aufloesung() != 0 ? nummer.aufloesung() : serie.aufloesung();
+        return new FilmInfo(serie.titel(), serie.jahr(), aufloesung, nummer.staffel(), nummer.folge());
     }
 
     private static FilmInfo mitAufloesungAusDatei(FilmInfo info, Path video) {

@@ -15,13 +15,15 @@ import java.util.stream.Stream;
  *
  * <p>Gespeichert wird lokal in {@code <Ziel>/.filmorganizer/katalog.tsv}. Zusätzlich zählt jeder
  * Ordner nach dem Schema {@code Titel (Jahr)} im Ziel als vorhandener Film, auch wenn er nicht
- * im Katalog steht (z.B. von Hand angelegt).
+ * im Katalog steht (z.B. von Hand angelegt), ebenso jede Folge nach dem Schema
+ * {@code Serien/Titel/Staffel 01/Titel - S01E02.<Endung>}.
  */
 public final class Katalog {
 
     static final String VERWALTUNG = ".filmorganizer";
     private static final String DATEI = "katalog.tsv";
     private static final Pattern ZIELORDNER = Pattern.compile("^(.+) \\((\\d{4})\\)$");
+    private static final Pattern ZIELFOLGE = Pattern.compile("^(.+) - S(\\d{2,})E(\\d{2,})$");
 
     /**
      * Ein Film in der Sammlung.
@@ -47,8 +49,11 @@ public final class Katalog {
         if (Files.exists(datei)) {
             for (String zeile : Files.readAllLines(datei, StandardCharsets.UTF_8)) {
                 String[] teile = zeile.split("\t", -1);
-                if (teile.length == 5) {
-                    FilmInfo info = new FilmInfo(teile[0], Integer.parseInt(teile[1]), Integer.parseInt(teile[2]));
+                // Ältere Kataloge haben noch keine Spalten für Staffel und Folge.
+                if (teile.length == 5 || teile.length == 7) {
+                    FilmInfo info = new FilmInfo(teile[0], Integer.parseInt(teile[1]), Integer.parseInt(teile[2]),
+                            teile.length == 7 ? Integer.parseInt(teile[5]) : 0,
+                            teile.length == 7 ? Integer.parseInt(teile[6]) : 0);
                     eintraege.add(new Eintrag(info, teile[3], Long.parseLong(teile[4])));
                 }
             }
@@ -71,6 +76,28 @@ public final class Katalog {
                 FilmInfo info = new FilmInfo(m.group(1), Integer.parseInt(m.group(2)), 0);
                 if (finden(info.schluessel()) == null) {
                     eintraege.add(new Eintrag(info, ziel.relativize(o).toString(), 0));
+                }
+            }
+        }
+        folgenErgaenzen();
+    }
+
+    /** Folgen nach dem Schema {@code Serien/Titel/Staffel 01/Titel - S01E02.<Endung>}. */
+    private void folgenErgaenzen() throws IOException {
+        Path serien = ziel.resolve(FilmInfo.SERIEN);
+        if (!Files.isDirectory(serien)) {
+            return;
+        }
+        try (Stream<Path> dateien = Files.walk(serien, 3)) {
+            for (Path datei : dateien.filter(Files::isRegularFile).sorted().toList()) {
+                String name = datei.getFileName().toString();
+                Matcher m = ZIELFOLGE.matcher(Dateinamen.ohneEndung(name));
+                if (!Dateinamen.istVideo(name) || !m.matches()) {
+                    continue;
+                }
+                FilmInfo info = new FilmInfo(m.group(1), 0, 0, Integer.parseInt(m.group(2)), Integer.parseInt(m.group(3)));
+                if (finden(info.schluessel()) == null) {
+                    eintraege.add(new Eintrag(info, ziel.relativize(datei).toString(), 0));
                 }
             }
         }
@@ -102,7 +129,8 @@ public final class Katalog {
             // Nur Einträge mit Videodatei speichern; reine Ordner werden beim Laden ohnehin erkannt.
             if (e.groesse() > 0) {
                 zeilen.add(String.join("\t", e.info().titel(), Integer.toString(e.info().jahr()),
-                        Integer.toString(e.info().aufloesung()), e.video(), Long.toString(e.groesse())));
+                        Integer.toString(e.info().aufloesung()), e.video(), Long.toString(e.groesse()),
+                        Integer.toString(e.info().staffel()), Integer.toString(e.info().folge())));
             }
         }
         Files.write(verzeichnis.resolve(DATEI), zeilen, StandardCharsets.UTF_8);

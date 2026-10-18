@@ -25,6 +25,27 @@ class NamensErkennungTest {
     }
 
     @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+            Breaking.Bad.S01E02.German.DL.1080p.BluRay.x264-GRP | Breaking Bad | 0    | 1080 | 1 | 2
+            Doctor.Who.2005.S03E10.720p.HDTV                    | Doctor Who   | 2005 | 720  | 3 | 10
+            Dark - s02e05 - Verloren                            | Dark         | 0    | 0    | 2 | 5
+            The.Office.US.S05E14E15.German.WEBRip               | The Office US | 0   | 0    | 5 | 14
+            S01E01                                              | ''           | 0    | 0    | 1 | 1
+            Breaking.Bad.S01.German.DL.1080p.BluRay.x264-GRP    | Breaking Bad | 0    | 1080 | 1 | 0
+            Staffel 2                                           | ''           | 0    | 0    | 2 | 0
+            """)
+    void erkenntSerienfolgenUndStaffeln(String name, String titel, int jahr, int aufloesung, int staffel, int folge) {
+        assertEquals(new FilmInfo(titel, jahr, aufloesung, staffel, folge),
+                NamensErkennung.erkennenSerie(name).orElseThrow());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"Das.Dschungelbuch.2016.German.DTSHD.1080p.BluRay.x264-FDHQ", "Sissi 1955", "lhd-kater-1080p"})
+    void filmeSindKeineSerien(String name) {
+        assertTrue(NamensErkennung.erkennenSerie(name).isEmpty());
+    }
+
+    @ParameterizedTest
     @CsvSource({"Der gestiefelte Kater (1080p)", "lhd-kater-1080p", "WodkaE-The.Jungle.Book.1080p", "Daten-Filmorganizer"})
     void ohneJahrKeinErgebnis(String name) {
         assertTrue(NamensErkennung.erkennen(name).isEmpty());

@@ -102,11 +102,15 @@ public final class Vorschlaege {
         if (k == null) {
             return film;
         }
+        // Bei Serienfolgen bleiben Staffel und Folge erhalten, das Jahr ist dort nicht nötig.
+        boolean folge = film.erkannt() && film.info().istFolge();
         FilmInfo info = null;
-        if (!k.titel().isEmpty() && k.jahr() > 0) {
+        if (!k.titel().isEmpty() && (k.jahr() > 0 || folge)) {
             int aufloesung = film.erkannt() ? film.info().aufloesung()
                     : NamensErkennung.aufloesung(film.video().getFileName().toString().replace('.', ' '));
-            info = new FilmInfo(k.titel(), k.jahr(), aufloesung);
+            info = folge
+                    ? new FilmInfo(k.titel(), k.jahr(), aufloesung, film.info().staffel(), film.info().folge())
+                    : new FilmInfo(k.titel(), k.jahr(), aufloesung);
         }
         return new Film(film.video(), film.groesse(), info, film.begleitdateien());
     }

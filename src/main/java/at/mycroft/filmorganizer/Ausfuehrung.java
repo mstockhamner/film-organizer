@@ -165,14 +165,14 @@ public final class Ausfuehrung {
         Files.delete(von);
     }
 
+    /** Entfernt leere Ordner bis hinauf zum Ziel, z.B. Staffel-, Serien- und Filmordner. */
     private static void leerenOrdnerEntfernen(Path ordner, Path ziel) throws IOException {
-        if (ordner == null || ordner.equals(ziel) || !ordner.startsWith(ziel)) {
-            return;
-        }
-        try {
-            Files.deleteIfExists(ordner);
-        } catch (DirectoryNotEmptyException e) {
-            // Ordner enthält noch etwas, bleibt stehen.
+        for (Path o = ordner; o != null && !o.equals(ziel) && o.startsWith(ziel); o = o.getParent()) {
+            try {
+                Files.deleteIfExists(o);
+            } catch (DirectoryNotEmptyException e) {
+                return; // Ordner enthält noch etwas, bleibt stehen.
+            }
         }
     }
 

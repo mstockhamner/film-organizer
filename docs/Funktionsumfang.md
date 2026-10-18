@@ -31,6 +31,7 @@ Stand: 18.10.2026 · Projekt: `E:\claude\work\film-organizer` (at.mycroft.filmor
 - Aus Ordner- und Dateinamen, ergänzt um lokal vorhandene Infos: `.nfo`-Dateien und eingebettete MKV-Tags.
 - Technik-Angaben herauslösen und separat speichern: Auflösung (1080p), Quelle (BluRay), Codec (x264), Ton (AC3, DTSHD), Sprache (German, DL).
 - Unsichere Erkennungen werden markiert und manuell bestätigt oder korrigiert.
+- **Serien** (ergänzt 18.10.2026): In den Quellordnern liegen Filme und Serien gemischt. Eine Kennung wie `S01E02` (Staffel 1, Folge 2) im Datei- oder Ordnernamen macht aus der Datei eine Serienfolge. Staffel und Folge kommen bevorzugt aus dem Dateinamen, der Serientitel aus einem Ordner mit Kennung (`Breaking.Bad.S01.German.1080p`), sonst aus dem Dateinamen, sonst aus dem Ordner über einem Staffelordner (`Dark/Staffel 2/s02e05.mp4`). Für Folgen ist kein Jahr nötig. Doubletten bei Folgen: gleicher Serientitel, gleiche Staffel und Folge.
 
 ### 3.3 Doubletten finden
 Stufenweise, damit nicht jede Datei komplett gelesen werden muss:
@@ -44,6 +45,7 @@ Stufenweise, damit nicht jede Datei komplett gelesen werden muss:
 - Liegt der Zielordner auf einem anderen Laufwerk, wird zuerst kopiert, die Kopie geprüft (Größe und Prüfsumme) und erst dann die Quelldatei entfernt.
 - Vor dem Start wird geprüft, ob auf dem Ziellaufwerk genug Platz ist.
 - Zielschema (entschieden 18.10.2026): `Ziel/Titel (Jahr)/Titel (Jahr).<Endung>`, die Original-Endung bleibt erhalten (`.mkv`, `.mp4` usw.). Dazu `poster.jpg/png` und Untertitel `Titel (Jahr).de.srt`.
+- Serienfolgen (ergänzt 18.10.2026): `Ziel/Serien/Titel/Staffel 01/Titel - S01E02.<Endung>`. Begleitdateien heißen wie die Folge (z.B. `Titel - S01E02.jpg`), weil sich die Folgen einen Staffelordner teilen.
 - Zeichen, die unter Windows in Dateinamen verboten sind (`: ? * " < > |`), werden ersetzt, z.B. `:` durch ` -`.
 - Vorschau aller geplanten Verschiebungen, dann Ausführung.
 - Konflikte (Zieldatei existiert schon) werden nicht überschrieben, sondern gemeldet.
@@ -58,7 +60,6 @@ Stufenweise, damit nicht jede Datei komplett gelesen werden muss:
 
 ## 4. Nicht im Umfang (erste Version)
 - Online-Metadaten, Poster-Download, Bewertungen
-- Serien und Episoden
 - Umwandeln oder Komprimieren von Videos
 - Löschen von Dateien
 
