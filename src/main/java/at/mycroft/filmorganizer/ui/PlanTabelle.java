@@ -25,12 +25,10 @@ final class PlanTabelle extends AbstractTableModel {
     static final int ENTSCHEIDUNG = 6;
 
     static final String IN_QUARANTAENE = "Doublette → Quarantäne";
+    static final String ERSETZT = "Ersetzt vorhandene";
 
     private static final String[] SPALTEN = {"Übernehmen", "Status", "Titel", "Jahr", "Gefunden in",
         "Neuer Ort / Hinweis", "Entscheidung"};
-
-    /** Auswahl in der Spalte Entscheidung, in der Reihenfolge von {@link Entscheidung}. */
-    static final String[] ENTSCHEIDUNGEN = {"bitte wählen", "Beide behalten", "In Quarantäne"};
 
     private Vorschlaege vorschlaege;
     private List<Aktion> plan = List.of();
@@ -90,7 +88,7 @@ final class PlanTabelle extends AbstractTableModel {
     @Override
     public boolean isCellEditable(int zeile, int spalte) {
         return spalte == UEBERNEHMEN || spalte == TITEL || spalte == JAHR
-                || spalte == ENTSCHEIDUNG && mitEntscheidung(plan.get(zeile));
+                || spalte == ENTSCHEIDUNG && !plan.get(zeile).auswahl().isEmpty();
     }
 
     @Override
@@ -105,12 +103,11 @@ final class PlanTabelle extends AbstractTableModel {
                 yield jahr > 0 ? jahr : null;
             }
             case GEFUNDEN -> relativ(quelle, aktion.film().video());
-            case ENTSCHEIDUNG -> mitEntscheidung(aktion)
-                    ? ENTSCHEIDUNGEN[vorschlaege.entscheidung(aktion.film().video()).ordinal()] : "";
+            case ENTSCHEIDUNG -> aktion.auswahl().isEmpty() ? "" : text(aktion, aktion.entscheidung());
             default -> aktion.art() == Aktion.Art.EINSORTIEREN
-                    ? relativ(vorschlaege.ziel(), aktion.verschiebungen().get(0).nach())
-                    : aktion.inQuarantaene()
-                    ? relativ(vorschlaege.ziel(), aktion.verschiebungen().get(0).nach()) + " (" + aktion.hinweis() + ")"
+                    ? relativ(vorschlaege.ziel(), neuerOrt(aktion))
+                    : aktion.art() == Aktion.Art.ERSETZEN || aktion.inQuarantaene()
+                    ? relativ(vorschlaege.ziel(), neuerOrt(aktion)) + " (" + aktion.hinweis() + ")"
                     : hinweis(aktion);
         };
     }
@@ -124,8 +121,13 @@ final class PlanTabelle extends AbstractTableModel {
             case TITEL -> vorschlaege.korrigieren(video, String.valueOf(wert), vorschlaege.jahr(aktion.film()));
             case JAHR -> vorschlaege.korrigieren(video, vorschlaege.titel(aktion.film()),
                     wert instanceof Integer jahr ? jahr : 0);
-            case ENTSCHEIDUNG -> vorschlaege.entscheiden(video,
-                    Entscheidung.values()[Math.max(0, List.of(ENTSCHEIDUNGEN).indexOf(String.valueOf(wert)))]);
+            case ENTSCHEIDUNG -> {
+                for (Entscheidung e : aktion.auswahl()) {
+                    if (text(aktion, e).equals(String.valueOf(wert))) {
+                        vorschlaege.entscheiden(video, e);
+                    }
+                }
+            }
             default -> {
                 return;
             }
@@ -139,10 +141,20 @@ final class PlanTabelle extends AbstractTableModel {
         nachAenderung.run();
     }
 
-    /** Andere Fassung, für die nachgefragt wird, oder eine schon getroffene Entscheidung dazu. */
-    private boolean mitEntscheidung(Aktion aktion) {
-        return aktion.art() == Aktion.Art.FASSUNG
-                || vorschlaege.entscheidung(aktion.film().video()) != Entscheidung.OFFEN;
+    /** Auswahl für die Spalte Entscheidung in dieser Zeile, der Vorschlag ist gekennzeichnet. */
+    String[] auswahl(int zeile) {
+        Aktion aktion = plan.get(zeile);
+        return aktion.auswahl().stream().map(e -> text(aktion, e)).toArray(String[]::new);
+    }
+
+    private static String text(Aktion aktion, Entscheidung e) {
+        return e == aktion.vorschlag() && e != Entscheidung.OFFEN ? e.text() + " (Vorschlag)" : e.text();
+    }
+
+    /** Wohin das Video kommt: in die Sammlung oder in die Quarantäne. */
+    private static Path neuerOrt(Aktion aktion) {
+        return aktion.verschiebungen().stream().filter(v -> v.von().equals(aktion.film().video()))
+                .findFirst().orElseThrow().nach();
     }
 
     private String hinweis(Aktion aktion) {
@@ -164,6 +176,7 @@ final class PlanTabelle extends AbstractTableModel {
         return switch (art) {
             case EINSORTIEREN -> "Wird einsortiert";
             case DOUBLETTE -> "Doublette";
+            case ERSETZEN -> ERSETZT;
             case FASSUNG -> "Andere Fassung";
             case UNERKANNT -> "Nicht erkannt";
             case KONFLIKT -> "Konflikt";

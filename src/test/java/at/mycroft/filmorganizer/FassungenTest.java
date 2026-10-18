@@ -107,8 +107,11 @@ class FassungenTest {
         Map<Path, Entscheidung> antwort = Main.fassungenNachfragen(Main.planErstellen(quelle, ziel),
                 new BufferedReader(new StringReader("b\n")), still);
         assertEquals(Map.of(extended, Entscheidung.BEIDE_BEHALTEN), antwort);
-        assertFalse(Main.fassungenNachfragen(Main.planErstellen(quelle, ziel),
-                new BufferedReader(new StringReader("l\n")), still).containsKey(extended));
+        assertEquals(Map.of(extended, Entscheidung.LIEGEN_LASSEN), Main.fassungenNachfragen(
+                Main.planErstellen(quelle, ziel), new BufferedReader(new StringReader("l\n")), still));
+        Aktion liegen = aktion(Main.planErstellen(quelle, ziel, Map.of(extended, Entscheidung.LIEGEN_LASSEN)), extended);
+        assertEquals(Art.FASSUNG, liegen.art());
+        assertFalse(liegen.offen());
     }
 
     private static Aktion aktion(List<Aktion> plan, Path video) {

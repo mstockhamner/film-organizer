@@ -30,6 +30,7 @@ import java.util.prefs.Preferences;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.DefaultCellEditor;
+import javax.swing.DefaultComboBoxModel;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
@@ -149,8 +150,16 @@ public final class Fenster extends JFrame {
             ansicht.getColumnModel().getColumn(spalte).setPreferredWidth(breiten[spalte]);
         }
         ansicht.getColumnModel().getColumn(PlanTabelle.STATUS).setCellRenderer(new StatusDarstellung());
-        ansicht.getColumnModel().getColumn(PlanTabelle.ENTSCHEIDUNG)
-                .setCellEditor(new DefaultCellEditor(new JComboBox<>(PlanTabelle.ENTSCHEIDUNGEN)));
+        // Jede Zeile hat ihre eigene Auswahl, z.B. "Ersetzen" nur gegenüber einer Fassung in der Sammlung.
+        JComboBox<String> auswahl = new JComboBox<>();
+        ansicht.getColumnModel().getColumn(PlanTabelle.ENTSCHEIDUNG).setCellEditor(new DefaultCellEditor(auswahl) {
+            @Override
+            public Component getTableCellEditorComponent(JTable table, Object wert, boolean ausgewaehlt,
+                    int zeile, int spalte) {
+                auswahl.setModel(new DefaultComboBoxModel<>(tabelle.auswahl(table.convertRowIndexToModel(zeile))));
+                return super.getTableCellEditorComponent(table, wert, ausgewaehlt, zeile, spalte);
+            }
+        });
         DefaultTableCellRenderer mitTooltip = new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object wert, boolean ausgewaehlt,
@@ -210,7 +219,7 @@ public final class Fenster extends JFrame {
 
     private void nachAenderung() {
         List<Aktion> plan = tabelle.plan();
-        einsortieren.setEnabled(anzahl(plan, Art.EINSORTIEREN) + quarantaene(plan) > 0);
+        einsortieren.setEnabled(anzahl(plan, Art.EINSORTIEREN) + anzahl(plan, Art.ERSETZEN) + quarantaene(plan) > 0);
         status.setText(zusammenfassung(plan));
     }
 
@@ -218,16 +227,18 @@ public final class Fenster extends JFrame {
         List<Aktion> plan = tabelle.plan();
         Path z = tabelle.ziel();
         long anzahl = anzahl(plan, Art.EINSORTIEREN);
+        long ersetzt = anzahl(plan, Art.ERSETZEN);
         long quarantaene = quarantaene(plan);
-        long offen = anzahl(plan, Art.FASSUNG);
+        long offen = plan.stream().filter(Aktion::offen).count();
         int antwort = JOptionPane.showConfirmDialog(this,
                 anzahl + " Filme nach\n" + z + "\nverschieben?\n\n"
+                        + (ersetzt == 0 ? "" : ersetzt + " vorhandene Filme werden durch bessere Fassungen ersetzt, "
+                                + "die alten kommen in die Quarantäne.\n")
+                        + quarantaene + " Doubletten kommen in die Quarantäne " + z.resolve(Planer.QUARANTAENE) + ".\n"
                         + (offen == 0 ? "" : offen + " andere Fassungen (z.B. Extended neben der Kinofassung) sind noch "
-                                + "nicht entschieden und bleiben liegen.\nIn der Spalte „Entscheidung“ lässt sich "
-                                + "„Beide behalten“ oder „In Quarantäne“ wählen.\n\n")
-                        + quarantaene + " Doubletten (identisch oder schlechter) kommen nach "
-                        + z.resolve(Planer.QUARANTAENE) + ".\n"
-                        + "Alles andere (übrige Doubletten, nicht erkannte, ausgelassene Filme, Konflikte) bleibt liegen.\n"
+                                + "nicht entschieden und bleiben liegen.\n")
+                        + "\nIn der Spalte „Entscheidung“ lässt sich für jede Doublette etwas anderes wählen.\n"
+                        + "Alles andere (nicht erkannte, ausgelassene Filme, Konflikte) bleibt liegen.\n"
                         + "Der Lauf lässt sich danach rückgängig machen.",
                 "Einsortieren", JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
         if (antwort != JOptionPane.OK_OPTION) {
@@ -242,7 +253,7 @@ public final class Fenster extends JFrame {
             }
             return Ausfuehrung.ausfuehren(plan, z, stilleAusgabe());
         }, erledigt -> {
-            JOptionPane.showMessageDialog(this, erledigt + " Filme einsortiert, " + quarantaene
+            JOptionPane.showMessageDialog(this, erledigt + " Filme einsortiert oder ersetzt, " + quarantaene
                     + " Doubletten in " + Planer.QUARANTAENE + " verschoben.", "Fertig",
                     JOptionPane.INFORMATION_MESSAGE);
             vorschauErstellen();
@@ -311,7 +322,8 @@ public final class Fenster extends JFrame {
         }
         return anzahl(plan, Art.EINSORTIEREN) + " werden einsortiert, "
                 + anzahl(plan, Art.DOUBLETTE) + " Doubletten (davon " + quarantaene(plan) + " in Quarantäne), "
-                + anzahl(plan, Art.FASSUNG) + " andere Fassungen zu entscheiden, "
+                + anzahl(plan, Art.ERSETZEN) + " ersetzen vorhandene, "
+                + plan.stream().filter(Aktion::offen).count() + " andere Fassungen zu entscheiden, "
                 + anzahl(plan, Art.UNERKANNT) + " nicht erkannt, "
                 + anzahl(plan, Art.KONFLIKT) + " Konflikte, " + anzahl(plan, Art.AUSGELASSEN) + " ausgelassen. "
                 + "Titel und Jahr lassen sich per Doppelklick ändern. Es wurde noch nichts verändert.";
@@ -348,7 +360,7 @@ public final class Fenster extends JFrame {
             Component c = super.getTableCellRendererComponent(table, wert, ausgewaehlt, fokus, zeile, spalte);
             if (!ausgewaehlt) {
                 c.setForeground(switch (String.valueOf(wert)) {
-                    case "Wird einsortiert" -> new Color(0x1B7F3B);
+                    case "Wird einsortiert", PlanTabelle.ERSETZT -> new Color(0x1B7F3B);
                     case "Doublette", PlanTabelle.IN_QUARANTAENE -> new Color(0xB35C00);
                     case "Ausgelassen" -> Color.GRAY;
                     default -> new Color(0xB00020);

@@ -74,12 +74,29 @@ class PlanTabelleTest {
     }
 
     @Test
+    void entscheidungFuerDoublette() throws IOException {
+        Path ziel = quelle.resolve("Sammlung");
+        datei("Der.Pate.1972.German.1080p/pate.mkv");
+        datei("Der.Pate.1972.German.720p/pate.mkv");
+        PlanTabelle tabelle = new PlanTabelle();
+        tabelle.anzeigen(Vorschlaege.einlesen(quelle, ziel), quelle);
+        int schlechter = 1;
+        assertEquals(PlanTabelle.IN_QUARANTAENE, tabelle.getValueAt(schlechter, PlanTabelle.STATUS));
+        assertEquals("In Quarantäne (Vorschlag)", tabelle.getValueAt(schlechter, PlanTabelle.ENTSCHEIDUNG));
+        assertEquals(List.of("In Quarantäne (Vorschlag)", "Liegen lassen"), List.of(tabelle.auswahl(schlechter)));
+
+        tabelle.setValueAt("Liegen lassen", schlechter, PlanTabelle.ENTSCHEIDUNG);
+        assertEquals("Doublette", tabelle.getValueAt(schlechter, PlanTabelle.STATUS));
+        assertEquals("Liegen lassen", tabelle.getValueAt(schlechter, PlanTabelle.ENTSCHEIDUNG));
+    }
+
+    @Test
     void zusammenfassungZaehltNachArt() {
         Film f = new Film(quelle.resolve("a.mkv"), 1, null, List.of());
         assertEquals("Keine Filme gefunden.", Fenster.zusammenfassung(List.of()));
         assertTrue(Fenster.zusammenfassung(List.of(new Aktion(Art.UNERKANNT, f, List.of(), "")))
                 .startsWith("0 werden einsortiert, 0 Doubletten (davon 0 in Quarantäne), "
-                        + "0 andere Fassungen zu entscheiden, 1 nicht erkannt, "
+                        + "0 ersetzen vorhandene, 0 andere Fassungen zu entscheiden, 1 nicht erkannt, "
                         + "0 Konflikte, 0 ausgelassen."));
     }
 

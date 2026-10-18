@@ -38,10 +38,10 @@ public final class Main {
         PrintStream aus = System.out;
         if (args.length == 0) {
             Fenster.starten();
-        } else if (args.length == 3 && args[0].equals("vorschau")) {
-            vorschauAusgeben(planErstellen(Path.of(args[1]), Path.of(args[2])), aus);
-        } else if (args.length == 3 && args[0].equals("ausfuehren")) {
-            ausfuehren(Path.of(args[1]), Path.of(args[2]), aus);
+        } else if (mitSchalter(args, "vorschau")) {
+            vorschauAusgeben(planErstellen(Path.of(args[1]), Path.of(args[2]), liegenLassen(args)), aus);
+        } else if (mitSchalter(args, "ausfuehren")) {
+            ausfuehren(Path.of(args[1]), Path.of(args[2]), liegenLassen(args), aus);
         } else if (args.length == 2 && args[0].equals("rueckgaengig")) {
             int anzahl = Ausfuehrung.rueckgaengig(Path.of(args[1]), aus);
             aus.println(anzahl < 0 ? "Nichts rückgängig zu machen." : anzahl + " Dateien zurückverschoben.");
@@ -58,7 +58,37 @@ public final class Main {
                   vorschau     <quelle> <ziel>   zeigt, was passieren würde, ändert nichts
                   ausfuehren   <quelle> <ziel>   zeigt die Vorschau und verschiebt nach Bestätigung
                   rueckgaengig <ziel>            macht den letzten Lauf rückgängig
+
+                  --doubletten=quarantaene       Doubletten nach den Vorschlägen behandeln (Standard):
+                                                 identische und schlechtere in die Quarantäne _Doubletten,
+                                                 bessere ersetzen die vorhandene Fassung
+                  --doubletten=liegen            alle Doubletten in der Quelle liegen lassen
                 """;
+    }
+
+    private static boolean mitSchalter(String[] args, String befehl) {
+        return args[0].equals(befehl) && (args.length == 3
+                || args.length == 4 && (args[3].equals("--doubletten=liegen") || args[3].equals("--doubletten=quarantaene")));
+    }
+
+    private static boolean liegenLassen(String[] args) {
+        return args.length == 4 && args[3].equals("--doubletten=liegen");
+    }
+
+    private static List<Aktion> planErstellen(Path quelle, Path ziel, boolean liegenLassen) throws IOException {
+        List<Aktion> plan = planErstellen(quelle, ziel);
+        return liegenLassen ? planErstellen(quelle, ziel, allesLiegenLassen(plan, Map.of())) : plan;
+    }
+
+    /** Ergänzt die Entscheidungen so, dass keine Doublette verschoben oder ersetzt wird. */
+    static Map<Path, Entscheidung> allesLiegenLassen(List<Aktion> plan, Map<Path, Entscheidung> entscheidungen) {
+        Map<Path, Entscheidung> ergebnis = new HashMap<>(entscheidungen);
+        for (Aktion aktion : plan) {
+            if (aktion.art() != Art.FASSUNG && aktion.auswahl().contains(Entscheidung.LIEGEN_LASSEN)) {
+                ergebnis.put(aktion.film().video(), Entscheidung.LIEGEN_LASSEN);
+            }
+        }
+        return ergebnis;
     }
 
     /** Durchsucht die Quelle und erstellt den Plan, ändert nichts. */
@@ -86,15 +116,14 @@ public final class Main {
             aus.println(ueberschrift(art) + " (" + aktionen.size() + ")");
             for (Aktion aktion : aktionen) {
                 aus.println("  " + aktion.film().video());
-                if (art == Art.EINSORTIEREN) {
-                    for (Aktion.Verschiebung v : aktion.verschiebungen()) {
-                        aus.println("      -> " + v.nach());
-                    }
-                } else {
+                if (art != Art.EINSORTIEREN) {
                     aus.println("      " + aktion.hinweis());
-                    if (aktion.inQuarantaene()) {
-                        aus.println("      -> Quarantäne: " + aktion.verschiebungen().get(0).nach());
-                    }
+                }
+                if (!aktion.auswahl().isEmpty() && art != Art.FASSUNG) {
+                    aus.println("      Entscheidung: " + aktion.entscheidung().text());
+                }
+                for (Aktion.Verschiebung v : aktion.verschiebungen()) {
+                    aus.println("      " + v.von().getFileName() + " -> " + v.nach());
                 }
             }
         }
@@ -106,6 +135,7 @@ public final class Main {
             case EINSORTIEREN -> "Wird einsortiert";
             case DOUBLETTE -> "Doubletten (identische und schlechtere kommen nach " + Planer.QUARANTAENE
                     + ", andere bleiben liegen)";
+            case ERSETZEN -> "Bessere Fassungen, ersetzen die vorhandene (die alte kommt nach " + Planer.QUARANTAENE + ")";
             case FASSUNG -> "Andere Fassungen eines vorhandenen Films, Rückfrage beim Ausführen";
             case UNERKANNT -> "Nicht erkannt, bleiben liegen";
             case KONFLIKT -> "Konflikte, bleiben liegen";
@@ -113,17 +143,21 @@ public final class Main {
         };
     }
 
-    private static void ausfuehren(Path quelle, Path ziel, PrintStream aus) throws IOException {
+    private static void ausfuehren(Path quelle, Path ziel, boolean liegenLassen, PrintStream aus) throws IOException {
         BufferedReader ein = new BufferedReader(new InputStreamReader(System.in));
-        List<Aktion> plan = planErstellen(quelle, ziel);
+        List<Aktion> plan = planErstellen(quelle, ziel, liegenLassen);
         vorschauAusgeben(plan, aus);
         Map<Path, Entscheidung> entscheidungen = fassungenNachfragen(plan, ein, aus);
         if (!entscheidungen.isEmpty()) {
+            if (liegenLassen) {
+                entscheidungen = allesLiegenLassen(plan, entscheidungen);
+            }
             plan = planErstellen(quelle, ziel, entscheidungen);
         }
         long anzahl = plan.stream().filter(a -> a.art() == Art.EINSORTIEREN).count();
+        long ersetzt = plan.stream().filter(a -> a.art() == Art.ERSETZEN).count();
         long quarantaene = plan.stream().filter(Aktion::inQuarantaene).count();
-        if (anzahl == 0 && quarantaene == 0) {
+        if (anzahl == 0 && ersetzt == 0 && quarantaene == 0) {
             aus.println("Nichts einzusortieren.");
             return;
         }
@@ -132,8 +166,9 @@ public final class Main {
             aus.printf(Locale.ROOT, "Auf dem Ziellaufwerk fehlen %.1f GB. Abbruch.%n", fehlt / 1e9);
             return;
         }
-        aus.print(anzahl + " Filme einsortieren und " + quarantaene + " Doubletten nach " + Planer.QUARANTAENE
-                + " verschieben? Zum Bestätigen \"ja\" eingeben: ");
+        aus.print(anzahl + " Filme einsortieren, " + ersetzt + " vorhandene durch bessere Fassungen ersetzen "
+                + "(die alten kommen nach " + Planer.QUARANTAENE + ") und " + quarantaene + " Doubletten nach "
+                + Planer.QUARANTAENE + " verschieben? Zum Bestätigen \"ja\" eingeben: ");
         aus.flush();
         String antwort = ein.readLine();
         if (antwort == null || !antwort.trim().equalsIgnoreCase("ja")) {
@@ -141,13 +176,13 @@ public final class Main {
             return;
         }
         int erledigt = Ausfuehrung.ausfuehren(plan, ziel, aus);
-        aus.println(erledigt + " Filme einsortiert, " + quarantaene + " Doubletten in " + Planer.QUARANTAENE
+        aus.println(erledigt + " Filme einsortiert oder ersetzt, " + quarantaene + " Doubletten in " + Planer.QUARANTAENE
                 + ". Rückgängig mit: rueckgaengig \"" + ziel + "\"");
     }
 
     /**
      * Fragt für jede andere Fassung eines vorhandenen Films nach, ob beide behalten werden, die neue in
-     * die Quarantäne kommt oder liegen bleibt. Liefert nur die getroffenen Entscheidungen.
+     * die Quarantäne kommt oder liegen bleibt. Ohne Antwort b oder q bleibt sie liegen.
      */
     static Map<Path, Entscheidung> fassungenNachfragen(List<Aktion> plan, BufferedReader ein, PrintStream aus)
             throws IOException {
@@ -166,6 +201,8 @@ public final class Main {
                 entscheidungen.put(aktion.film().video(), Entscheidung.BEIDE_BEHALTEN);
             } else if (wahl.startsWith("q")) {
                 entscheidungen.put(aktion.film().video(), Entscheidung.QUARANTAENE);
+            } else {
+                entscheidungen.put(aktion.film().video(), Entscheidung.LIEGEN_LASSEN);
             }
         }
         return entscheidungen;

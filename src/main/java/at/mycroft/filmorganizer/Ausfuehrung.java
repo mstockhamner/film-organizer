@@ -32,6 +32,7 @@ import java.util.stream.Stream;
 public final class Ausfuehrung {
 
     private static final String PROTOKOLLE = "protokolle";
+    static final String BERICHTE = "berichte";
     private static final String ERLEDIGT = ".rueckgaengig";
     // Mit Millisekunden, damit zwei Läufe in derselben Sekunde verschiedene Protokolle bekommen.
     private static final DateTimeFormatter ZEITSTEMPEL = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS");
@@ -56,20 +57,23 @@ public final class Ausfuehrung {
     }
 
     /**
-     * Führt alle {@link Art#EINSORTIEREN}-Aktionen aus, verschiebt Doubletten in die Quarantäne und
-     * gibt die Anzahl einsortierter Filme zurück.
+     * Führt alle {@link Art#EINSORTIEREN}- und {@link Art#ERSETZEN}-Aktionen aus, verschiebt Doubletten
+     * in die Quarantäne und gibt die Anzahl einsortierter Filme zurück (ersetzte mitgezählt). Gibt es
+     * Doubletten oder andere Fassungen, wird zusätzlich ein Doublettenbericht geschrieben.
      */
     public static int ausfuehren(List<Aktion> plan, Path ziel, PrintStream ausgabe) throws IOException {
         Files.createDirectories(ziel);
         Katalog katalog = Katalog.laden(ziel);
         Path protokolle = ziel.resolve(Katalog.VERWALTUNG).resolve(PROTOKOLLE);
         Files.createDirectories(protokolle);
-        Path protokoll = protokolle.resolve(LocalDateTime.now().format(ZEITSTEMPEL) + ".tsv");
+        String zeitstempel = LocalDateTime.now().format(ZEITSTEMPEL);
+        Path protokoll = protokolle.resolve(zeitstempel + ".tsv");
+        berichtSchreiben(plan, ziel.resolve(Katalog.VERWALTUNG).resolve(BERICHTE).resolve(zeitstempel + "-doubletten.txt"));
         int filme = 0;
         try (BufferedWriter schreiber = Files.newBufferedWriter(protokoll, StandardCharsets.UTF_8,
                 StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
             for (Aktion aktion : plan) {
-                if (aktion.art() != Art.EINSORTIEREN && !aktion.inQuarantaene()) {
+                if (aktion.art() != Art.EINSORTIEREN && aktion.art() != Art.ERSETZEN && !aktion.inQuarantaene()) {
                     continue;
                 }
                 for (Verschiebung v : aktion.verschiebungen()) {
@@ -79,19 +83,41 @@ public final class Ausfuehrung {
                     schreiber.newLine();
                     schreiber.flush();
                 }
-                Path video = aktion.verschiebungen().get(0).nach();
+                Path video = aktion.verschiebungen().stream().filter(v -> v.von().equals(aktion.film().video()))
+                        .findFirst().orElseThrow().nach();
                 if (aktion.inQuarantaene()) {
                     ausgabe.println("in Quarantäne: " + ziel.relativize(video));
                     continue;
                 }
+                // Beim Ersetzen fällt der alte Eintrag weg, weil Film und Fassung gleich sind.
                 katalog.hinzufuegen(new Katalog.Eintrag(aktion.film().info(), ziel.relativize(video).toString(),
                         aktion.film().groesse()));
                 katalog.speichern();
                 filme++;
-                ausgabe.println("einsortiert: " + ziel.relativize(video));
+                ausgabe.println((aktion.art() == Art.ERSETZEN ? "ersetzt: " : "einsortiert: ") + ziel.relativize(video));
             }
         }
         return filme;
+    }
+
+    /** Listet Doubletten und andere Fassungen mit Entscheidung, Hinweis und Ziel auf. */
+    static void berichtSchreiben(List<Aktion> plan, Path datei) throws IOException {
+        List<Aktion> betroffen = plan.stream().filter(a -> !a.auswahl().isEmpty()).toList();
+        if (betroffen.isEmpty()) {
+            return;
+        }
+        List<String> zeilen = new ArrayList<>();
+        zeilen.add("Doublettenbericht vom " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")));
+        for (Aktion a : betroffen) {
+            zeilen.add("");
+            zeilen.add(a.entscheidung().text() + ": " + a.film().video());
+            zeilen.add("    " + a.hinweis());
+            for (Verschiebung v : a.verschiebungen()) {
+                zeilen.add("    " + v.von() + " -> " + v.nach());
+            }
+        }
+        Files.createDirectories(datei.getParent());
+        Files.write(datei, zeilen, StandardCharsets.UTF_8);
     }
 
     /**

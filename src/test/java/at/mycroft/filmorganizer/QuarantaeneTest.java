@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import at.mycroft.filmorganizer.Aktion.Art;
+import at.mycroft.filmorganizer.Aktion.Entscheidung;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
@@ -12,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -53,17 +55,27 @@ class QuarantaeneTest {
     }
 
     @Test
-    void bessereOderUnklareFassungBleibtLiegen() throws IOException {
-        Path besser = datei("Das.Dschungelbuch.2016.German.2160p.UHD.BluRay.x265-GRP/jungle.mkv", "4k");
+    void unklareFassungBleibtLiegen() throws IOException {
         Path unklar = datei("Das Dschungelbuch (2016)/andere.mkv", "ohne aufloesung");
 
         List<Aktion> plan = Main.planErstellen(quelle, ziel);
-        assertEquals(Art.DOUBLETTE, aktion(plan, besser).art());
-        assertFalse(aktion(plan, besser).inQuarantaene());
+        assertEquals(Art.DOUBLETTE, aktion(plan, unklar).art());
+        assertEquals(Entscheidung.LIEGEN_LASSEN, aktion(plan, unklar).vorschlag());
         assertFalse(aktion(plan, unklar).inQuarantaene());
         Ausfuehrung.ausfuehren(plan, ziel, still);
-        assertTrue(Files.exists(besser));
         assertTrue(Files.exists(unklar));
+    }
+
+    @Test
+    void vorschlagLaesstSichAendern() throws IOException {
+        Path schlechter = datei("Das Dschungelbuch (2016) 720p/dschungel.mkv", "dschungel 720p");
+        Aktion aktion = aktion(Main.planErstellen(quelle, ziel, Map.of(schlechter, Entscheidung.LIEGEN_LASSEN)), schlechter);
+        assertEquals(Entscheidung.QUARANTAENE, aktion.vorschlag());
+        assertEquals(Entscheidung.LIEGEN_LASSEN, aktion.entscheidung());
+        assertFalse(aktion.inQuarantaene());
+        // "Beide behalten" gibt es nur für andere Fassungen, dann gilt der Vorschlag.
+        assertTrue(aktion(Main.planErstellen(quelle, ziel, Map.of(schlechter, Entscheidung.BEIDE_BEHALTEN)),
+                schlechter).inQuarantaene());
     }
 
     @Test

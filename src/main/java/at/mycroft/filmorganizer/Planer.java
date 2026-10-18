@@ -12,10 +12,12 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
 
 /**
  * Erstellt aus den gefundenen Filmen einen Plan: was einsortiert wird, was eine Doublette ist
@@ -80,14 +82,15 @@ public final class Planer {
             kandidaten.add(bester);
             for (Film andere : sortiert.subList(1, sortiert.size())) {
                 if (gleicheDatei(andere, List.of(bester)) != null) {
-                    aktionen.add(quarantaene(andere, "identische Datei wie " + bester.video()));
+                    aktionen.add(doublette(andere, "identische Datei wie " + bester.video(),
+                            Entscheidung.QUARANTAENE, null));
                 } else if (schlechter(andere.info().aufloesung(), bester.info().aufloesung())) {
-                    aktionen.add(quarantaene(andere, "gleicher Film wie " + bester.video()
+                    aktionen.add(doublette(andere, "gleicher Film wie " + bester.video()
                             + " (schlechtere Fassung: " + andere.info().aufloesung() + "p statt "
-                            + bester.info().aufloesung() + "p)"));
+                            + bester.info().aufloesung() + "p)", Entscheidung.QUARANTAENE, null));
                 } else {
-                    aktionen.add(new Aktion(Art.DOUBLETTE, andere, List.of(),
-                            "gleicher Film wie " + bester.video() + " (diese Fassung wird einsortiert)"));
+                    aktionen.add(doublette(andere, "gleicher Film wie " + bester.video()
+                            + " (diese Fassung wird einsortiert)", Entscheidung.LIEGEN_LASSEN, null));
                 }
             }
         }
@@ -97,7 +100,7 @@ public final class Planer {
         for (Film film : kandidaten) {
             Film gleich = gleicheDatei(film, eindeutig);
             if (gleich != null) {
-                aktionen.add(quarantaene(film, "identische Datei wie " + gleich.video()));
+                aktionen.add(doublette(film, "identische Datei wie " + gleich.video(), Entscheidung.QUARANTAENE, null));
             } else {
                 eindeutig.add(film);
             }
@@ -125,30 +128,119 @@ public final class Planer {
                 .findFirst().orElse(null);
         if (vorhanden != null) {
             if (identisch(film, vorhanden)) {
-                return quarantaene(film, "identische Datei schon in der Sammlung: " + vorhanden.video());
+                return doublette(film, "identische Datei schon in der Sammlung: " + vorhanden.video(),
+                        Entscheidung.QUARANTAENE, null);
             }
             String hinweis = "schon in der Sammlung: " + vorhanden.video() + vergleich(film, vorhanden);
-            // Eine bessere oder gleichwertige neue Fassung bleibt liegen, bis über das Ersetzen entschieden ist.
-            return schlechter(film.info().aufloesung(), vorhanden.info().aufloesung())
-                    ? quarantaene(film, hinweis)
-                    : new Aktion(Art.DOUBLETTE, film, List.of(), hinweis);
+            // Ersetzen geht nur, wenn die vorhandene Videodatei eindeutig feststeht.
+            Path alt = katalog.alle(film.info().schluessel()).contains(vorhanden) ? alteDatei(vorhanden) : null;
+            int neu = film.info().aufloesung();
+            int bisher = vorhanden.info().aufloesung();
+            Entscheidung vorschlag = schlechter(neu, bisher) ? Entscheidung.QUARANTAENE
+                    : schlechter(bisher, neu) && alt != null ? Entscheidung.ERSETZEN
+                    : Entscheidung.LIEGEN_LASSEN;
+            return doublette(film, hinweis, vorschlag, alt == null ? null : new Ersatz(alt, fassungen.size() > 1));
         }
         for (Katalog.Eintrag eintrag : katalog.eintraege()) {
             if (identisch(film, eintrag)) {
-                return quarantaene(film, "identische Datei schon in der Sammlung: " + eintrag.video());
+                return doublette(film, "identische Datei schon in der Sammlung: " + eintrag.video(),
+                        Entscheidung.QUARANTAENE, null);
             }
         }
         if (!fassungen.isEmpty()) {
             Katalog.Eintrag andere = fassungen.get(0);
             String hinweis = "andere Fassung (" + bezeichnung(film.info()) + ") von " + andere.video()
                     + " (" + bezeichnung(andere.info()) + ")";
-            return switch (entscheidungen.getOrDefault(film.video(), Entscheidung.OFFEN)) {
-                case OFFEN -> new Aktion(Art.FASSUNG, film, List.of(), hinweis + ", bitte entscheiden");
-                case QUARANTAENE -> quarantaene(film, hinweis);
+            List<Entscheidung> auswahl = List.of(Entscheidung.OFFEN, Entscheidung.BEIDE_BEHALTEN,
+                    Entscheidung.QUARANTAENE, Entscheidung.LIEGEN_LASSEN);
+            Entscheidung gewaehlt = wahl(film, Entscheidung.OFFEN, auswahl);
+            Aktion aktion = switch (gewaehlt) {
                 case BEIDE_BEHALTEN -> einsortieren(film, true);
+                case QUARANTAENE -> quarantaene(film, hinweis);
+                case LIEGEN_LASSEN -> new Aktion(Art.FASSUNG, film, List.of(), hinweis + ", bleibt liegen");
+                default -> new Aktion(Art.FASSUNG, film, List.of(), hinweis + ", bitte entscheiden");
             };
+            return aktion.mit(gewaehlt, Entscheidung.OFFEN, auswahl);
         }
         return einsortieren(film, false);
+    }
+
+    /**
+     * Vorhandene Fassung, die durch eine neue ersetzt werden kann.
+     *
+     * @param video       ihre Videodatei in der Sammlung
+     * @param teiltOrdner ob im Ordner noch andere Fassungen liegen (dann tragen Begleitdateien den Videonamen)
+     */
+    private record Ersatz(Path video, boolean teiltOrdner) {
+    }
+
+    /**
+     * Doublette mit Vorschlag. Möglich sind Quarantäne und Liegenlassen, Ersetzen nur gegenüber einer
+     * vorhandenen Fassung in der Sammlung ({@code ersatz}).
+     */
+    private Aktion doublette(Film film, String hinweis, Entscheidung vorschlag, Ersatz ersatz) {
+        List<Entscheidung> auswahl = ersatz == null
+                ? List.of(Entscheidung.QUARANTAENE, Entscheidung.LIEGEN_LASSEN)
+                : List.of(Entscheidung.ERSETZEN, Entscheidung.QUARANTAENE, Entscheidung.LIEGEN_LASSEN);
+        Entscheidung gewaehlt = wahl(film, vorschlag, auswahl);
+        Aktion aktion = switch (gewaehlt) {
+            case QUARANTAENE -> quarantaene(film, hinweis);
+            case ERSETZEN -> ersetzen(film, ersatz, hinweis);
+            default -> new Aktion(Art.DOUBLETTE, film, List.of(), hinweis);
+        };
+        return aktion.mit(gewaehlt, vorschlag, auswahl);
+    }
+
+    /** Die gewählte Entscheidung, wenn sie für diesen Film möglich ist, sonst der Vorschlag. */
+    private Entscheidung wahl(Film film, Entscheidung vorschlag, List<Entscheidung> auswahl) {
+        Entscheidung gewaehlt = entscheidungen.get(film.video());
+        return gewaehlt != null && auswahl.contains(gewaehlt) ? gewaehlt : vorschlag;
+    }
+
+    /**
+     * Die neue Fassung nimmt den Platz der vorhandenen ein. Zuerst kommen die alte Videodatei und alle
+     * Dateien, die von den neuen Namen belegt sind (z.B. {@code poster.jpg}), in die Quarantäne, dann
+     * wird die neue Fassung einsortiert. Andere Dateien im Ordner bleiben, wo sie sind.
+     */
+    private Aktion ersetzen(Film film, Ersatz ersatz, String hinweis) {
+        List<Verschiebung> neu = zielVerschiebungen(film, ersatz.teiltOrdner() || film.info().istFolge());
+        Set<Path> weg = new LinkedHashSet<>();
+        weg.add(ersatz.video());
+        for (Verschiebung v : neu) {
+            if (Files.isRegularFile(v.nach())) {
+                weg.add(v.nach());
+            }
+        }
+        List<Verschiebung> verschiebungen = new ArrayList<>();
+        for (Path datei : weg) {
+            Path nach = inQuarantaene(datei);
+            if (Files.exists(nach)) {
+                return new Aktion(Art.DOUBLETTE, film, List.of(),
+                        hinweis + "; Ersetzen nicht möglich, in der Quarantäne liegt schon " + nach);
+            }
+            verschiebungen.add(new Verschiebung(datei, nach));
+        }
+        verschiebungen.addAll(neu);
+        return new Aktion(Art.ERSETZEN, film, verschiebungen, hinweis);
+    }
+
+    /**
+     * Videodatei eines Katalogeintrags: die Datei selbst oder, bei einem von Hand angelegten Ordner,
+     * die einzige Videodatei darin. {@code null}, wenn sie nicht eindeutig ist.
+     */
+    private Path alteDatei(Katalog.Eintrag eintrag) throws IOException {
+        Path pfad = ziel.resolve(eintrag.video());
+        if (Files.isRegularFile(pfad)) {
+            return pfad;
+        }
+        if (!Files.isDirectory(pfad)) {
+            return null;
+        }
+        try (Stream<Path> inhalt = Files.list(pfad)) {
+            List<Path> videos = inhalt.filter(Files::isRegularFile)
+                    .filter(p -> Dateinamen.istVideo(p.getFileName().toString())).toList();
+            return videos.size() == 1 ? videos.get(0) : null;
+        }
     }
 
     private static String bezeichnung(FilmInfo info) {
@@ -160,18 +252,12 @@ public final class Planer {
      * weitere Fassungen eines Films teilen sich einen Ordner ({@code teiltOrdner}).
      */
     private Aktion einsortieren(Film film, boolean teiltOrdner) {
-        String name = film.info().zielName();
         Path ordner = film.info().zielOrdner(ziel);
         boolean gemeinsam = teiltOrdner || film.info().istFolge();
         if (!gemeinsam && Files.exists(ordner)) {
             return new Aktion(Art.KONFLIKT, film, List.of(), "Zielordner existiert schon: " + ordner);
         }
-        List<Verschiebung> verschiebungen = new ArrayList<>();
-        String endung = Dateinamen.endung(film.video().getFileName().toString());
-        verschiebungen.add(new Verschiebung(film.video(), ordner.resolve(name + "." + endung)));
-        for (Map.Entry<Path, String> begleit : begleitNamen(film, name, gemeinsam).entrySet()) {
-            verschiebungen.add(new Verschiebung(begleit.getKey(), ordner.resolve(begleit.getValue())));
-        }
+        List<Verschiebung> verschiebungen = zielVerschiebungen(film, gemeinsam);
         for (Verschiebung v : verschiebungen) {
             if (Files.exists(v.nach())) {
                 return new Aktion(Art.KONFLIKT, film, List.of(), "Zieldatei existiert schon: " + v.nach());
@@ -180,7 +266,31 @@ public final class Planer {
         return new Aktion(Art.EINSORTIEREN, film, verschiebungen, "");
     }
 
+    /** Video und Begleitdateien mit ihren neuen Pfaden in der Sammlung, ohne Prüfung auf belegte Plätze. */
+    private List<Verschiebung> zielVerschiebungen(Film film, boolean gemeinsam) {
+        String name = film.info().zielName();
+        Path ordner = film.info().zielOrdner(ziel);
+        List<Verschiebung> verschiebungen = new ArrayList<>();
+        String endung = Dateinamen.endung(film.video().getFileName().toString());
+        verschiebungen.add(new Verschiebung(film.video(), ordner.resolve(name + "." + endung)));
+        for (Map.Entry<Path, String> begleit : begleitNamen(film, name, gemeinsam).entrySet()) {
+            verschiebungen.add(new Verschiebung(begleit.getKey(), ordner.resolve(begleit.getValue())));
+        }
+        return verschiebungen;
+    }
+
+    /** Vergleich der beiden Fassungen für die Vorschau: Auflösung und Größe. */
     private static String vergleich(Film neu, Katalog.Eintrag alt) {
+        return urteil(neu, alt) + " – neu: " + kurz(neu.info().aufloesung(), neu.groesse())
+                + ", vorhanden: " + kurz(alt.info().aufloesung(), alt.groesse());
+    }
+
+    private static String kurz(int aufloesung, long groesse) {
+        String text = aufloesung > 0 ? aufloesung + "p" : "Auflösung unbekannt";
+        return groesse > 0 ? text + String.format(Locale.GERMANY, ", %.1f GB", groesse / 1e9) : text;
+    }
+
+    private static String urteil(Film neu, Katalog.Eintrag alt) {
         int aufloesungAlt = alt.info().aufloesung();
         int aufloesungNeu = neu.info().aufloesung();
         if (aufloesungAlt > 0 && aufloesungNeu > 0 && aufloesungAlt != aufloesungNeu) {
