@@ -64,7 +64,7 @@ class SerienTest {
     void vonHandAbgelegteFolgeZaehltAlsVorhanden() throws IOException {
         Path vorhanden = ziel.resolve("Serien/Dark/Staffel 02/Dark - S02E05.mkv");
         Files.createDirectories(vorhanden.getParent());
-        Files.writeString(vorhanden, "alt");
+        Files.writeString(vorhanden, "alte, größere Datei"); // größer als die neue, also keine Ersetzung
         assertEquals(Art.DOUBLETTE, art(Main.planErstellen(quelle, ziel), "s02e05.mp4"));
     }
 

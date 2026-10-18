@@ -76,6 +76,7 @@ class ErsetzenTest {
         Path hand = ziel.resolve("Der Pate (1972)/pate.avi");
         Files.createDirectories(hand.getParent());
         Files.writeString(hand, "alt");
+        // Auflösung der alten Datei unbekannt, beide gleich groß: nicht eindeutig, also nur auf Wunsch ersetzen.
         Path neu = datei("Der.Pate.1972.German.1080p.BluRay/pate.mkv", "neu");
 
         Aktion vorschlag = aktion(Main.planErstellen(quelle, ziel), neu);

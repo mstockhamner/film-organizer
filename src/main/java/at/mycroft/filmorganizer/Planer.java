@@ -84,13 +84,14 @@ public final class Planer {
                 if (gleicheDatei(andere, List.of(bester)) != null) {
                     aktionen.add(doublette(andere, "identische Datei wie " + bester.video(),
                             Entscheidung.QUARANTAENE, null));
-                } else if (schlechter(andere.info().aufloesung(), bester.info().aufloesung())) {
-                    aktionen.add(doublette(andere, "gleicher Film wie " + bester.video()
-                            + " (schlechtere Fassung: " + andere.info().aufloesung() + "p statt "
-                            + bester.info().aufloesung() + "p)", Entscheidung.QUARANTAENE, null));
                 } else {
-                    aktionen.add(doublette(andere, "gleicher Film wie " + bester.video()
-                            + " (diese Fassung wird einsortiert)", Entscheidung.LIEGEN_LASSEN, null));
+                    String hinweis = "gleicher Film wie " + bester.video() + " (diese Fassung wird einsortiert) – diese: "
+                            + kurz(andere.info().aufloesung(), andere.groesse())
+                            + ", einsortiert: " + kurz(bester.info().aufloesung(), bester.groesse());
+                    boolean schlechter = vergleichen(andere.info().aufloesung(), andere.groesse(),
+                            bester.info().aufloesung(), bester.groesse()) < 0;
+                    aktionen.add(doublette(andere, hinweis,
+                            schlechter ? Entscheidung.QUARANTAENE : Entscheidung.LIEGEN_LASSEN, null));
                 }
             }
         }
@@ -131,13 +132,18 @@ public final class Planer {
                 return doublette(film, "identische Datei schon in der Sammlung: " + vorhanden.video(),
                         Entscheidung.QUARANTAENE, null);
             }
-            String hinweis = "schon in der Sammlung: " + vorhanden.video() + vergleich(film, vorhanden);
             // Ersetzen geht nur, wenn die vorhandene Videodatei eindeutig feststeht.
             Path alt = katalog.alle(film.info().schluessel()).contains(vorhanden) ? alteDatei(vorhanden) : null;
-            int neu = film.info().aufloesung();
-            int bisher = vorhanden.info().aufloesung();
-            Entscheidung vorschlag = schlechter(neu, bisher) ? Entscheidung.QUARANTAENE
-                    : schlechter(bisher, neu) && alt != null ? Entscheidung.ERSETZEN
+            // Von Hand abgelegte Filme stehen ohne Größe im Katalog, dann zählt die Datei selbst.
+            long altGroesse = vorhanden.groesse() > 0 ? vorhanden.groesse() : alt != null ? Files.size(alt) : 0;
+            int neuAufl = film.info().aufloesung();
+            int altAufl = vorhanden.info().aufloesung();
+            String hinweis = "schon in der Sammlung: " + vorhanden.video()
+                    + urteil(neuAufl, film.groesse(), altAufl, altGroesse)
+                    + " – neu: " + kurz(neuAufl, film.groesse()) + ", vorhanden: " + kurz(altAufl, altGroesse);
+            int vergleich = vergleichen(neuAufl, film.groesse(), altAufl, altGroesse);
+            Entscheidung vorschlag = vergleich < 0 ? Entscheidung.QUARANTAENE
+                    : vergleich > 0 && alt != null ? Entscheidung.ERSETZEN
                     : Entscheidung.LIEGEN_LASSEN;
             return doublette(film, hinweis, vorschlag, alt == null ? null : new Ersatz(alt, fassungen.size() > 1));
         }
@@ -279,10 +285,21 @@ public final class Planer {
         return verschiebungen;
     }
 
-    /** Vergleich der beiden Fassungen für die Vorschau: Auflösung und Größe. */
-    private static String vergleich(Film neu, Katalog.Eintrag alt) {
-        return urteil(neu, alt) + " – neu: " + kurz(neu.info().aufloesung(), neu.groesse())
-                + ", vorhanden: " + kurz(alt.info().aufloesung(), alt.groesse());
+    /**
+     * Welche von zwei Fassungen behalten wird: zuerst zählt die Auflösung, wenn sie bei beiden bekannt
+     * ist und sich unterscheidet, sonst die größere Datei.
+     *
+     * @return negativ, wenn die neue schlechter ist, positiv, wenn sie besser ist, 0 wenn es nicht
+     *         eindeutig ist (gleiche Auflösung und gleiche oder unbekannte Größe)
+     */
+    static int vergleichen(int neuAufloesung, long neuGroesse, int altAufloesung, long altGroesse) {
+        if (neuAufloesung > 0 && altAufloesung > 0 && neuAufloesung != altAufloesung) {
+            return Integer.compare(neuAufloesung, altAufloesung);
+        }
+        if (neuGroesse > 0 && altGroesse > 0) {
+            return Long.compare(neuGroesse, altGroesse);
+        }
+        return 0;
     }
 
     private static String kurz(int aufloesung, long groesse) {
@@ -290,20 +307,14 @@ public final class Planer {
         return groesse > 0 ? text + String.format(Locale.GERMANY, ", %.1f GB", groesse / 1e9) : text;
     }
 
-    private static String urteil(Film neu, Katalog.Eintrag alt) {
-        int aufloesungAlt = alt.info().aufloesung();
-        int aufloesungNeu = neu.info().aufloesung();
-        if (aufloesungAlt > 0 && aufloesungNeu > 0 && aufloesungAlt != aufloesungNeu) {
-            return aufloesungNeu > aufloesungAlt
-                    ? " (neue Fassung ist besser: " + aufloesungNeu + "p statt " + aufloesungAlt + "p)"
-                    : " (vorhandene Fassung ist besser: " + aufloesungAlt + "p statt " + aufloesungNeu + "p)";
+    private static String urteil(int neuAufloesung, long neuGroesse, int altAufloesung, long altGroesse) {
+        if (neuAufloesung > 0 && altAufloesung > 0 && neuAufloesung != altAufloesung) {
+            return neuAufloesung > altAufloesung
+                    ? " (neue Fassung ist besser: " + neuAufloesung + "p statt " + altAufloesung + "p)"
+                    : " (vorhandene Fassung ist besser: " + altAufloesung + "p statt " + neuAufloesung + "p)";
         }
-        if (alt.groesse() > 0 && alt.groesse() != neu.groesse()) {
-            return neu.groesse() > alt.groesse()
-                    ? " (neue Datei ist größer)"
-                    : " (vorhandene Datei ist größer)";
-        }
-        return "";
+        int vergleich = vergleichen(neuAufloesung, neuGroesse, altAufloesung, altGroesse);
+        return vergleich > 0 ? " (neue Datei ist größer)" : vergleich < 0 ? " (vorhandene Datei ist größer)" : "";
     }
 
     /**
@@ -330,11 +341,6 @@ public final class Planer {
         Path absolut = datei.toAbsolutePath().normalize();
         Path ohneLaufwerk = absolut.getRoot() == null ? absolut : absolut.getRoot().relativize(absolut);
         return quarantaene.resolve(ohneLaufwerk);
-    }
-
-    /** Nur bei bekannter Auflösung auf beiden Seiten ist eine Fassung sicher schlechter. */
-    private static boolean schlechter(int aufloesung, int vergleich) {
-        return aufloesung > 0 && vergleich > 0 && aufloesung < vergleich;
     }
 
     private boolean identisch(Film film, Katalog.Eintrag eintrag) throws IOException {

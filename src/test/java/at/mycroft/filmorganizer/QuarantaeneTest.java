@@ -56,7 +56,8 @@ class QuarantaeneTest {
 
     @Test
     void unklareFassungBleibtLiegen() throws IOException {
-        Path unklar = datei("Das Dschungelbuch (2016)/andere.mkv", "ohne aufloesung");
+        // Auflösung unbekannt und gleich groß wie die vorhandene Datei: nicht eindeutig.
+        Path unklar = datei("Das Dschungelbuch (2016)/andere.mkv", "dschungel ?????");
 
         List<Aktion> plan = Main.planErstellen(quelle, ziel);
         assertEquals(Art.DOUBLETTE, aktion(plan, unklar).art());
