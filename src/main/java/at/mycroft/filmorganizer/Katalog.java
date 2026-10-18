@@ -117,17 +117,16 @@ public final class Katalog {
     }
 
     /**
-     * Verschiebt im Katalog alle Einträge aus dem Filmordner {@code ordner} (direkt im Ziel) in den
-     * Ordner der Filmreihe {@code reihe}.
+     * Verschiebt im Katalog alle Einträge aus dem Filmordner {@code alt} nach {@code neu} (beide relativ
+     * zum Ziel) und trägt die neue Filmreihe ein (leer: keine).
      */
-    public void umziehen(String ordner, String reihe) {
-        String reihenOrdner = Dateinamen.bereinigen(reihe);
+    public void umziehen(Path alt, Path neu, String reihe) {
         for (int i = 0; i < eintraege.size(); i++) {
             Eintrag e = eintraege.get(i);
             Path pfad = Path.of(e.video());
-            if (pfad.getName(0).toString().equals(ordner)) {
-                eintraege.set(i, new Eintrag(e.info().mitReihe(reihe),
-                        Path.of(reihenOrdner).resolve(pfad).toString(), e.groesse()));
+            if (pfad.startsWith(alt)) {
+                eintraege.set(i, new Eintrag(e.info().mitReihe(reihe), neu.resolve(alt.relativize(pfad)).toString(),
+                        e.groesse()));
             }
         }
     }

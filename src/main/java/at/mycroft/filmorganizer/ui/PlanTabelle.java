@@ -177,6 +177,13 @@ final class PlanTabelle extends AbstractTableModel {
         return gesetzt;
     }
 
+    /** Merkt die von Hand gesetzten Filmreihen dauerhaft, nachdem {@code plan} ausgeführt wurde. */
+    void zuordnungenMerken(List<Aktion> ausgefuehrt) throws IOException {
+        if (vorschlaege != null) {
+            vorschlaege.zuordnungenMerken(ausgefuehrt);
+        }
+    }
+
     /** Alle Filmreihen aus Vorschau und Sammlung, alphabetisch, für die Auswahl beim Zuweisen. */
     List<String> bekannteReihen() {
         TreeSet<String> reihen = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);

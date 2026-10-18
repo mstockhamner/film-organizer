@@ -50,12 +50,17 @@ public final class Planer {
     /** In diesem Lauf zum Einsortieren vorgesehene Filme, damit weitere Fassungen sie als vorhanden sehen. */
     private final List<Katalog.Eintrag> eingeplant = new ArrayList<>();
 
-    private Planer(Path ziel, Katalog katalog, Map<Path, Entscheidung> entscheidungen, Map<Path, String> reihen) {
+    /** Gemerkte, von Hand festgelegte Filmreihen aus früheren Läufen. */
+    private final Reihenzuordnung gemerkt;
+
+    private Planer(Path ziel, Katalog katalog, Map<Path, Entscheidung> entscheidungen, Map<Path, String> reihen,
+            Reihenzuordnung gemerkt) {
         this.ziel = ziel;
         this.quarantaene = ziel.resolve(QUARANTAENE).resolve(LocalDate.now().toString());
         this.katalog = katalog;
         this.entscheidungen = entscheidungen;
         this.reihenVorgaben = reihen;
+        this.gemerkt = gemerkt;
     }
 
     public static List<Aktion> planen(List<Film> filme, Katalog katalog, Path ziel) throws IOException {
@@ -71,7 +76,7 @@ public final class Planer {
     /** Wie oben, zusätzlich mit von Hand gesetzten Filmreihen je Videodatei (leer: keine Reihe). */
     public static List<Aktion> planen(List<Film> filme, Katalog katalog, Path ziel,
             Map<Path, Entscheidung> entscheidungen, Map<Path, String> reihen) throws IOException {
-        return new Planer(ziel, katalog, entscheidungen, reihen).planen(filme);
+        return new Planer(ziel, katalog, entscheidungen, reihen, Reihenzuordnung.laden(ziel)).planen(filme);
     }
 
     private List<Aktion> planen(List<Film> filme) throws IOException {
@@ -160,13 +165,19 @@ public final class Planer {
         return reihen;
     }
 
-    /** Von Hand gesetzte Reihe, sonst die erkannte; bei Serienfolgen keine. */
+    /** Von Hand gesetzte Reihe (in der Vorschau oder gemerkt), sonst die erkannte; bei Serienfolgen keine. */
     private String reiheFuer(Path video, FilmInfo info) {
         if (info.istFolge()) {
             return "";
         }
+        String vonHand = vonHand(video, info);
+        return vonHand != null ? vonHand : erkannteReihen.getOrDefault(FilmInfo.normalisieren(info.titel()), "");
+    }
+
+    /** In der Vorschau gesetzte Reihe, sonst die gemerkte; {@code null}, wenn nichts von Hand festgelegt ist. */
+    private String vonHand(Path video, FilmInfo info) {
         String vorgabe = reihenVorgaben.get(video);
-        return vorgabe != null ? vorgabe.trim() : erkannteReihen.getOrDefault(FilmInfo.normalisieren(info.titel()), "");
+        return vorgabe != null ? vorgabe.trim() : gemerkt.reihe(info);
     }
 
     private static Film mitReihe(Film film, String reihe) {
@@ -174,9 +185,11 @@ public final class Planer {
     }
 
     /**
-     * Filme, die direkt im Ziel liegen und zu einer Filmreihe gehören, kommen mit ihrem ganzen Ordner
-     * in den Ordner der Reihe. Ordner, in die in diesem Lauf etwas einsortiert wird, bleiben bis zum
-     * nächsten Lauf, wo sie sind.
+     * Filme der Sammlung, die in eine andere Filmreihe gehören, ziehen mit ihrem ganzen Ordner um: direkt
+     * im Ziel liegende in den Ordner einer erkannten Reihe, und jeder Film dorthin, wo er von Hand
+     * hingehört (in eine andere Reihe oder ohne Reihe zurück direkt ins Ziel). Ein Film, der schon in
+     * einer Reihe liegt, bleibt dort, solange nichts anderes von Hand festgelegt ist. Ordner, in die in
+     * diesem Lauf etwas einsortiert wird, bleiben bis zum nächsten Lauf, wo sie sind.
      */
     private List<Aktion> umsortieren(List<Aktion> geplant) throws IOException {
         Set<Path> belegt = new HashSet<>();
@@ -189,24 +202,30 @@ public final class Planer {
         List<Aktion> aktionen = new ArrayList<>();
         Set<Path> erledigt = new HashSet<>();
         for (Katalog.Eintrag e : katalog.eintraege()) {
-            if (e.info().istFolge() || !e.info().reihe().isEmpty()) {
+            if (e.info().istFolge()) {
                 continue;
             }
-            Path ordner = ziel.resolve(Path.of(e.video()).getName(0).toString());
-            if (!Files.isDirectory(ordner) || belegt.contains(ordner) || !erledigt.add(ordner)) {
+            String aktuell = e.info().reihe();
+            Path ordner = filmordner(e);
+            if (ordner == null || !Files.isDirectory(ordner) || belegt.contains(ordner) || !erledigt.add(ordner)) {
                 continue;
             }
             Path alt = alteDatei(e);
             Path anzeige = alt != null ? alt : ordner;
-            String reihe = reiheFuer(anzeige, e.info());
+            String vonHand = vonHand(anzeige, e.info());
+            String reihe = vonHand != null ? vonHand
+                    : aktuell.isEmpty() ? erkannteReihen.getOrDefault(FilmInfo.normalisieren(e.info().titel()), "") : aktuell;
             Film film = new Film(anzeige, alt != null ? Files.size(alt) : 0, e.info().mitReihe(reihe), List.of());
-            if (reihe.isEmpty()) {
+            if (Dateinamen.bereinigen(reihe).equalsIgnoreCase(aktuell)) {
+                // Bleibt, wo er ist; in der Vorschau sichtbar, wenn dort gerade etwas geändert wurde.
                 if (reihenVorgaben.containsKey(anzeige)) {
-                    aktionen.add(new Aktion(Art.AUSGELASSEN, film, List.of(), "bleibt ohne Filmreihe an seinem Platz"));
+                    aktionen.add(new Aktion(Art.AUSGELASSEN, new Film(anzeige, film.groesse(), e.info(), List.of()), List.of(),
+                            aktuell.isEmpty() ? "bleibt ohne Filmreihe an seinem Platz" : "bleibt in der Filmreihe " + aktuell));
                 }
                 continue;
             }
-            Path neu = ziel.resolve(Dateinamen.bereinigen(reihe)).resolve(ordner.getFileName());
+            Path neu = reihe.isEmpty() ? ziel.resolve(ordner.getFileName())
+                    : ziel.resolve(Dateinamen.bereinigen(reihe)).resolve(ordner.getFileName());
             if (Files.exists(neu)) {
                 aktionen.add(new Aktion(Art.KONFLIKT, film, List.of(), "Zielordner existiert schon: " + neu));
                 continue;
@@ -217,11 +236,21 @@ public final class Planer {
                     verschiebungen.add(new Verschiebung(datei, neu.resolve(ordner.relativize(datei))));
                 }
             }
+            String hinweis = reihe.isEmpty() ? "kommt aus der Filmreihe " + aktuell + " direkt ins Ziel"
+                    : aktuell.isEmpty() ? "gehört zur Filmreihe " + reihe
+                    : "wechselt von der Filmreihe " + aktuell + " nach " + reihe;
             if (!verschiebungen.isEmpty()) {
-                aktionen.add(new Aktion(Art.UMSORTIEREN, film, verschiebungen, "gehört zur Filmreihe " + reihe));
+                aktionen.add(new Aktion(Art.UMSORTIEREN, film, verschiebungen, hinweis));
             }
         }
         return aktionen;
+    }
+
+    /** Ordner eines Films der Sammlung: {@code Ziel/Titel (Jahr)} oder {@code Ziel/Reihe/Titel (Jahr)}. */
+    private Path filmordner(Katalog.Eintrag e) {
+        Path pfad = Path.of(e.video());
+        int tiefe = e.info().reihe().isEmpty() ? 1 : 2;
+        return pfad.getNameCount() < tiefe ? null : ziel.resolve(pfad.subpath(0, tiefe));
     }
 
     private Aktion gegenSammlung(Film neuerFilm) throws IOException {

@@ -120,6 +120,30 @@ public final class Vorschlaege {
         reihen.put(video, reihe == null ? "" : reihe.trim());
     }
 
+    /**
+     * Merkt die in der Vorschau von Hand gesetzten Filmreihen dauerhaft in
+     * {@code Ziel/.filmorganizer/filmreihen.tsv}, damit sie auch bei späteren Läufen gelten. Wird nach
+     * dem Einsortieren aufgerufen, also erst nach Bestätigung.
+     *
+     * @return Anzahl gemerkter Zuordnungen
+     */
+    public int zuordnungenMerken(List<Aktion> plan) throws IOException {
+        if (reihen.isEmpty()) {
+            return 0;
+        }
+        Reihenzuordnung gemerkt = Reihenzuordnung.laden(ziel);
+        int anzahl = 0;
+        for (Aktion aktion : plan) {
+            String reihe = reihen.get(aktion.film().video());
+            if (reihe != null && aktion.film().erkannt() && !aktion.film().info().istFolge()) {
+                gemerkt.setzen(aktion.film().info(), reihe);
+                anzahl++;
+            }
+        }
+        gemerkt.speichern();
+        return anzahl;
+    }
+
     /** Namen aller Filmreihen, die es in der Sammlung schon gibt. */
     public Set<String> sammlungsReihen() {
         Set<String> reihen = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);

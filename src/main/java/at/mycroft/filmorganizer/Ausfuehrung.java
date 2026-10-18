@@ -86,11 +86,16 @@ public final class Ausfuehrung {
                     schreiber.flush();
                 }
                 if (aktion.art() == Art.UMSORTIEREN) {
-                    String ordner = ziel.relativize(aktion.verschiebungen().get(0).von()).getName(0).toString();
-                    leereOrdnerEntfernen(ziel.resolve(ordner));
-                    katalog.umziehen(ordner, aktion.film().info().reihe());
+                    // Filmordner vorher und nachher: "Titel (Jahr)" direkt im Ziel oder "Reihe/Titel (Jahr)".
+                    Path von = ziel.relativize(aktion.verschiebungen().get(0).von());
+                    Path nach = ziel.relativize(aktion.verschiebungen().get(0).nach());
+                    Path alt = von.subpath(0, Katalog.reiheAusPfad(von.toString()).isEmpty() ? 1 : 2);
+                    Path neu = nach.subpath(0, aktion.film().info().reihe().isEmpty() ? 1 : 2);
+                    leereOrdnerEntfernen(ziel.resolve(alt));
+                    leerenOrdnerEntfernen(ziel.resolve(alt).getParent(), ziel);
+                    katalog.umziehen(alt, neu, aktion.film().info().reihe());
                     katalog.speichern();
-                    ausgabe.println("umsortiert: " + ordner + " -> " + Dateinamen.bereinigen(aktion.film().info().reihe()));
+                    ausgabe.println("umsortiert: " + alt + " -> " + neu);
                     continue;
                 }
                 Path video = aktion.verschiebungen().stream().filter(v -> v.von().equals(aktion.film().video()))
