@@ -29,17 +29,22 @@ public final class Scanner {
     }
 
     /**
-     * Findet alle Filme unter {@code quelle}. Der Zielordner wird übersprungen, auch wenn er
-     * innerhalb der Quelle liegt, damit einsortierte Filme nicht erneut auftauchen.
+     * Findet alle Filme unter {@code quelle}. Liegt der Zielordner innerhalb der Quelle, wird er mit
+     * allem darin (Sammlung, Quarantäne {@code _Doubletten}, Verwaltung {@code .filmorganizer})
+     * übersprungen, damit einsortierte Filme nicht erneut auftauchen.
      */
     public static List<Film> scannen(Path quelle, Path ziel) throws IOException {
         Path quelleAbs = quelle.toAbsolutePath().normalize();
-        Path zielAbs = ziel.toAbsolutePath().normalize();
+        Zielordner zielordner = new Zielordner(ziel);
         List<Path> videos = new ArrayList<>();
         Files.walkFileTree(quelleAbs, new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult preVisitDirectory(Path ordner, BasicFileAttributes attribute) {
-                return ordner.startsWith(zielAbs) ? FileVisitResult.SKIP_SUBTREE : FileVisitResult.CONTINUE;
+                if (zielordner.istZiel(ordner)) {
+                    LOG.info(() -> "Zielordner beim Durchsuchen übersprungen: " + ordner);
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
+                return FileVisitResult.CONTINUE;
             }
 
             @Override
@@ -65,6 +70,41 @@ public final class Scanner {
         LOG.info(() -> filme.size() + " Videodateien in " + quelleAbs + " gefunden, davon "
                 + filme.stream().filter(Film::erkannt).count() + " mit erkanntem Titel und Jahr");
         return filme;
+    }
+
+    /**
+     * Erkennt den Zielordner unabhängig von der Schreibweise des Pfads: relativ oder absolut, mit
+     * {@code ..}, in anderer Groß-/Kleinschreibung oder über eine Verknüpfung (Symlink, Junction).
+     */
+    static final class Zielordner {
+        private final Path absolut;
+        private final Path echt;
+
+        Zielordner(Path ziel) {
+            absolut = ziel.toAbsolutePath().normalize();
+            Path real;
+            try {
+                real = Files.exists(absolut) ? absolut.toRealPath() : null;
+            } catch (IOException e) {
+                real = null;
+            }
+            echt = real;
+        }
+
+        boolean istZiel(Path ordner) {
+            Path pfad = ordner.toAbsolutePath().normalize();
+            if (pfad.startsWith(absolut) || echt != null && pfad.startsWith(echt)) {
+                return true;
+            }
+            if (echt == null) {
+                return false; // Ziel existiert noch nicht, kann also nicht unter einem anderen Namen auftauchen
+            }
+            try {
+                return pfad.toRealPath().startsWith(echt) || Files.isSameFile(pfad, echt);
+            } catch (IOException e) {
+                return false;
+            }
+        }
     }
 
     /**
