@@ -239,6 +239,9 @@ final class PlanTabelle extends AbstractTableModel {
 
     private String hinweis(Aktion aktion) {
         if (aktion.art() == Aktion.Art.UNERKANNT) {
+            if (!aktion.film().notiz().isEmpty() && !vorschlaege.istKorrigiert(aktion.film().video())) {
+                return aktion.hinweis();
+            }
             boolean ohneTitel = vorschlaege.titel(aktion.film()).isEmpty();
             boolean ohneJahr = vorschlaege.jahr(aktion.film()) == 0;
             return ohneTitel && ohneJahr ? "Titel und Jahr in der Tabelle eintragen"

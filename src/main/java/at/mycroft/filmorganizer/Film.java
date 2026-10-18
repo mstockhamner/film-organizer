@@ -11,8 +11,13 @@ import java.util.List;
  * @param info           erkannter Titel und Jahr, {@code null} wenn nichts erkannt wurde; bei einem Film
  *                       ohne erkennbares Jahr (z.B. einer Sat-Aufnahme) ist das Jahr 0
  * @param begleitdateien Cover, Untertitel und .nfo, die zum Film gehören
+ * @param notiz          Erklärung, warum ein Film nicht erkannt wurde (z.B. Folge einer Sendereihe), sonst leer
  */
-public record Film(Path video, long groesse, FilmInfo info, List<Path> begleitdateien) {
+public record Film(Path video, long groesse, FilmInfo info, List<Path> begleitdateien, String notiz) {
+
+    public Film(Path video, long groesse, FilmInfo info, List<Path> begleitdateien) {
+        this(video, groesse, info, begleitdateien, "");
+    }
 
     /** Vollständig erkannt: Titel und Jahr, bei Serienfolgen Titel, Staffel und Folge. */
     public boolean erkannt() {

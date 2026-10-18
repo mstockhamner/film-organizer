@@ -1,9 +1,7 @@
 package at.mycroft.filmorganizer;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.UncheckedIOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Path;
@@ -16,8 +14,6 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.logging.Logger;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
@@ -80,7 +76,8 @@ public final class Scanner {
         Collections.sort(videos);
         List<Film> filme = new ArrayList<>();
         for (Path video : videos) {
-            filme.add(new Film(video, Files.size(video), erkennen(video, quelleAbs), begleitdateien(video)));
+            FilmInfo info = erkennen(video, quelleAbs);
+            filme.add(new Film(video, Files.size(video), info, begleitdateien(video), info == null ? notiz(video) : ""));
         }
         LOG.info(() -> filme.size() + " Videodateien in " + quelleAbs + " gefunden, davon "
                 + filme.stream().filter(Film::erkannt).count() + " mit erkanntem Titel und Jahr");
@@ -196,62 +193,44 @@ public final class Scanner {
     }
 
     /**
-     * Sat-Aufnahme: Der Titel steht im Dateinamen, das Datum darin ist aber der Aufnahmetag. Das
-     * Erscheinungsjahr kommt aus dem Ordner, wenn er denselben Film mit Jahr nennt
-     * ({@code The Greatest Showman (2017)/20200612 2226 - ATV HD - The Greatest Showman.ts}), sonst aus
-     * den Begleitdateien des Receivers ({@code .meta}, {@code .eit}), z.B. "Musical, USA 2017". Ohne Jahr
-     * bleibt es 0 und wird in der Vorschau nachgetragen.
+     * Sat-Aufnahme: Titel und Beschreibung kommen aus den Receiver-Dateien ({@code .ts.meta}, {@code .eit}),
+     * der Dateiname ist nur Ersatz, weil der Receiver Zeichen wie ":" oder "/" darin ersetzt. Das Datum im
+     * Namen ist der Aufnahmetag. Das Erscheinungsjahr kommt aus dem Ordner, wenn er denselben Film mit Jahr
+     * nennt ({@code The Greatest Showman (2017)/20200612 2226 - ATV HD - The Greatest Showman.ts}), sonst
+     * aus der Beschreibung, z.B. "Thriller, USA 2017". Ohne Jahr bleibt es 0 und wird in der Vorschau
+     * nachgetragen. Folgen einer Sendereihe (Terra X, Ninjago …) sind keine Filme: {@code null}.
      */
     static FilmInfo aufnahmeErkennen(Path video, NamensErkennung.Aufnahme aufnahme) {
+        ReceiverDaten daten = ReceiverDaten.lesen(video);
+        String titel = daten.titel().isEmpty() ? aufnahme.titel() : daten.titel();
+        if (daten.folge(titel) != null) {
+            return null;
+        }
         Path ordner = video.getParent();
         if (ordner != null && ordner.getFileName() != null) {
             Optional<FilmInfo> ausOrdner = NamensErkennung.erkennen(ordner.getFileName().toString());
             if (ausOrdner.isPresent()
-                    && FilmInfo.normalisieren(ausOrdner.get().titel()).equals(FilmInfo.normalisieren(aufnahme.titel()))) {
+                    && FilmInfo.normalisieren(ausOrdner.get().titel()).equals(FilmInfo.normalisieren(titel))) {
                 return ausOrdner.get();
             }
         }
-        int jahr = jahrAusReceiverDaten(video, aufnahme.datum().getYear());
+        int jahr = daten.jahr(aufnahme.datum().getYear());
         if (jahr == 0) {
             LOG.fine(() -> "Sat-Aufnahme ohne Erscheinungsjahr: " + video);
         }
-        return new FilmInfo(aufnahme.titel(), jahr, 0);
+        return new FilmInfo(titel, jahr, 0);
     }
 
-    /** Land und Jahr in der Sendungsbeschreibung, z.B. "USA 2017", "D/A 2004" oder "Großbritannien, 1999". */
-    private static final Pattern LAND_JAHR = Pattern.compile(
-            "(?<![A-Za-z])(?:USA|GB|UK|D|A|CH|F|I|E|CDN|CAN|AUS|NZ|IRL|J|DK|S|N|B|NL|PL|CZ|RUS|IND|HK|CHN|MEX|BR"
-                    + "|Deutschland|Österreich|Schweiz|Frankreich|Großbritannien|England|Kanada|Italien|Spanien|Japan)"
-                    + "(?:\\s*[/,]\\s*[A-Z][A-Za-z]{0,13})*\\s*,?\\s*((?:19|20)[0-9]{2})(?![0-9])");
-    private static final Pattern JAHR_ANGABE = Pattern.compile(
-            "(?i)(?:Produktionsjahr|Erscheinungsjahr|Jahr)\\s*:?\\s*((?:19|20)[0-9]{2})(?![0-9])");
-
-    /** Erscheinungsjahr aus {@code film.ts.meta} oder {@code film.eit}, 0 wenn keins zu finden ist. */
-    static int jahrAusReceiverDaten(Path video, int hoechstens) {
-        String name = video.getFileName().toString();
-        for (Path datei : List.of(video.resolveSibling(name + ".meta"),
-                video.resolveSibling(Dateinamen.ohneEndung(name) + ".eit"))) {
-            if (!Files.isRegularFile(datei)) {
-                continue;
-            }
-            String text;
-            try (InputStream ein = Files.newInputStream(datei)) {
-                // Binär (.eit) oder Text in unbekannter Kodierung: Latin-1 liest jedes Byte als ein Zeichen.
-                text = new String(ein.readNBytes(64 * 1024), StandardCharsets.ISO_8859_1);
-            } catch (IOException e) {
-                continue;
-            }
-            for (Pattern muster : List.of(LAND_JAHR, JAHR_ANGABE)) {
-                Matcher m = muster.matcher(text);
-                while (m.find()) {
-                    int jahr = Integer.parseInt(m.group(1));
-                    if (jahr <= hoechstens) {
-                        return jahr;
-                    }
-                }
-            }
+    /** Erklärung für die Vorschau, wenn eine Sat-Aufnahme eine Folge einer Sendereihe ist, sonst leer. */
+    static String notiz(Path video) {
+        Optional<NamensErkennung.Aufnahme> aufnahme = NamensErkennung.erkennenAufnahme(Dateinamen.ohneEndung(name(video)));
+        if (aufnahme.isEmpty()) {
+            return "";
         }
-        return 0;
+        ReceiverDaten daten = ReceiverDaten.lesen(video);
+        String titel = daten.titel().isEmpty() ? aufnahme.get().titel() : daten.titel();
+        String folge = daten.folge(titel);
+        return folge == null ? "" : "Folge einer Sendereihe: „" + titel + "“ – " + folge + " (bleibt liegen)";
     }
 
     /** Auflösung und Fassung, die im Ordnernamen fehlen, stehen oft im Dateinamen. */
