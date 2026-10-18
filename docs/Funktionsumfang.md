@@ -30,6 +30,7 @@ Stand: 18.10.2026 · Projekt: `E:\claude\work\film-organizer` (at.mycroft.filmor
 
 ### 3.2 Titel und Jahr erkennen
 - Aus Ordner- und Dateinamen, ergänzt um lokal vorhandene Infos: `.nfo`-Dateien und eingebettete MKV-Tags.
+- **Sat-Aufnahmen** (ergänzt 18.10.2026): Namen eines Sat-Receivers wie `20200612 2226 - ATV HD - The Greatest Showman` (Datum, Uhrzeit, Sender, Titel; auch mit `_` statt Leerzeichen und Teilnummer `_001`) ergeben den Titel „The Greatest Showman“. Das Datum ist der Aufnahmetag, nicht das Erscheinungsjahr. Das Jahr kommt aus dem Ordner, wenn er denselben Film mit Jahr nennt, sonst aus den lokalen Receiver-Dateien `.ts.meta` und `.eit` (z.B. „Musical, USA 2017“). Fehlt es, steht der Titel als Vorschlag in der Vorschau und nur das Jahr ist nachzutragen.
 - Technik-Angaben herauslösen und separat speichern: Auflösung (1080p), Quelle (BluRay), Codec (x264), Ton (AC3, DTSHD), Sprache (German, DL).
 - Unsichere Erkennungen werden markiert und manuell bestätigt oder korrigiert.
 - **Serien** (ergänzt 18.10.2026): In den Quellordnern liegen Filme und Serien gemischt. Eine Kennung wie `S01E02` (Staffel 1, Folge 2) im Datei- oder Ordnernamen macht aus der Datei eine Serienfolge. Staffel und Folge kommen bevorzugt aus dem Dateinamen, der Serientitel aus einem Ordner mit Kennung (`Breaking.Bad.S01.German.1080p`), sonst aus dem Dateinamen, sonst aus dem Ordner über einem Staffelordner (`Dark/Staffel 2/s02e05.mp4`). Für Folgen ist kein Jahr nötig. Doubletten bei Folgen: gleicher Serientitel, gleiche Staffel und Folge.

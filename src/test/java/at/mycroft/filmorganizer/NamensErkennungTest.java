@@ -46,6 +46,25 @@ class NamensErkennungTest {
     }
 
     @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+            20200612 2226 - ATV HD - The Greatest Showman              | The Greatest Showman      | ATV HD     | 2020-06-12
+            20191224 2015 - ORF1 HD - Kevin - Allein zu Haus           | Kevin - Allein zu Haus    | ORF1 HD    | 2019-12-24
+            20180301_2015_-_Das_Erste_HD_-_Tatort_001                  | Tatort                    | Das Erste HD | 2018-03-01
+            """)
+    void erkenntSatAufnahmen(String name, String titel, String sender, String datum) {
+        NamensErkennung.Aufnahme a = NamensErkennung.erkennenAufnahme(name).orElseThrow();
+        assertEquals(titel, a.titel());
+        assertEquals(sender, a.sender());
+        assertEquals(java.time.LocalDate.parse(datum), a.datum());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"Das.Dschungelbuch.2016.German.1080p", "20201340 2226 - ATV HD - Ungültiges Datum", "20200612 - ATV - X"})
+    void keineSatAufnahme(String name) {
+        assertTrue(NamensErkennung.erkennenAufnahme(name).isEmpty());
+    }
+
+    @ParameterizedTest
     @CsvSource({"Der gestiefelte Kater (1080p)", "lhd-kater-1080p", "WodkaE-The.Jungle.Book.1080p", "Daten-Filmorganizer"})
     void ohneJahrKeinErgebnis(String name) {
         assertTrue(NamensErkennung.erkennen(name).isEmpty());

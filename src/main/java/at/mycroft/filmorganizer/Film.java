@@ -8,12 +8,19 @@ import java.util.List;
  *
  * @param video          die Videodatei
  * @param groesse        Größe der Videodatei in Byte
- * @param info           erkannter Titel und Jahr, {@code null} wenn nicht erkannt
+ * @param info           erkannter Titel und Jahr, {@code null} wenn nichts erkannt wurde; bei einem Film
+ *                       ohne erkennbares Jahr (z.B. einer Sat-Aufnahme) ist das Jahr 0
  * @param begleitdateien Cover, Untertitel und .nfo, die zum Film gehören
  */
 public record Film(Path video, long groesse, FilmInfo info, List<Path> begleitdateien) {
 
+    /** Vollständig erkannt: Titel und Jahr, bei Serienfolgen Titel, Staffel und Folge. */
     public boolean erkannt() {
-        return info != null;
+        return info != null && (info.istFolge() || info.jahr() > 0);
+    }
+
+    /** Wenigstens ein Titel ist bekannt, auch wenn das Jahr noch fehlt. */
+    public boolean mitTitel() {
+        return info != null && !info.titel().isEmpty();
     }
 }

@@ -1,5 +1,7 @@
 package at.mycroft.filmorganizer;
 
+import java.time.DateTimeException;
+import java.time.LocalDate;
 import java.time.Year;
 import java.util.List;
 import java.util.Locale;
@@ -24,6 +26,21 @@ public final class NamensErkennung {
     private static final Pattern STAFFEL = Pattern.compile(
             "(?i)(?<![0-9A-Za-z])(?:S|Staffel |Season )([0-9]{1,2})(?![0-9A-Za-z])");
     private static final Pattern TITEL_JAHR = Pattern.compile("^(.+) ((?:19|20)[0-9]{2})$");
+    /** Aufnahme eines Sat-Receivers: Datum, Uhrzeit, Sender, Titel, z.B. {@code 20200612 2226 - ATV HD - Titel}. */
+    private static final Pattern AUFNAHME = Pattern.compile(
+            "^((?:19|20)[0-9]{2})([0-9]{2})([0-9]{2}) ([0-9]{4}) - (.+?) - (.+)$");
+    /** Teil einer gestückelten Aufnahme wie {@code …_001}. */
+    private static final Pattern TEIL = Pattern.compile("_[0-9]{3}$");
+
+    /**
+     * Was im Namen einer Sat-Aufnahme steht.
+     *
+     * @param titel  Titel der Sendung
+     * @param sender Sender, z.B. {@code ATV HD}
+     * @param datum  Tag der Aufnahme (nicht das Erscheinungsjahr des Films)
+     */
+    public record Aufnahme(String titel, String sender, LocalDate datum) {
+    }
 
     /** Angaben zu Sprache, Ton, Quelle und Codec, die nicht zum Titel gehören. */
     private static final Set<String> TECHNIK = Set.of(
@@ -78,6 +95,27 @@ public final class NamensErkennung {
             return Optional.empty();
         }
         return Optional.of(new FilmInfo(titel, Integer.parseInt(jahr.group(1)), aufloesung, 0, 0, fassung(text)));
+    }
+
+    /**
+     * Erkennt den Namen einer Sat-Receiver-Aufnahme (Enigma2 u.ä.):
+     * {@code 20200612 2226 - ATV HD - The Greatest Showman}, auch mit Unterstrichen statt Leerzeichen
+     * und mit Teilnummer ({@code _001}).
+     */
+    public static Optional<Aufnahme> erkennenAufnahme(String name) {
+        String text = TEIL.matcher(name.trim()).replaceFirst("").replace('_', ' ').replaceAll("\\s+", " ").trim();
+        Matcher m = AUFNAHME.matcher(text);
+        if (!m.matches()) {
+            return Optional.empty();
+        }
+        LocalDate datum;
+        try {
+            datum = LocalDate.of(Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2)), Integer.parseInt(m.group(3)));
+        } catch (DateTimeException e) {
+            return Optional.empty();
+        }
+        String titel = aufraeumen(m.group(6));
+        return titel.isEmpty() ? Optional.empty() : Optional.of(new Aufnahme(titel, m.group(5).trim(), datum));
     }
 
     /**

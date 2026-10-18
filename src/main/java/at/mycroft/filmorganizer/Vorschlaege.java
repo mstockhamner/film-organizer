@@ -81,13 +81,13 @@ public final class Vorschlaege {
     /** Aktueller Titel eines Films: Korrektur, sonst Erkennung, sonst leer. */
     public String titel(Film film) {
         Korrektur k = korrekturen.get(film.video());
-        return k != null ? k.titel() : film.erkannt() ? film.info().titel() : "";
+        return k != null ? k.titel() : film.info() != null ? film.info().titel() : "";
     }
 
     /** Aktuelles Jahr eines Films: Korrektur, sonst Erkennung, sonst 0. */
     public int jahr(Film film) {
         Korrektur k = korrekturen.get(film.video());
-        return k != null ? k.jahr() : film.erkannt() ? film.info().jahr() : 0;
+        return k != null ? k.jahr() : film.info() != null ? film.info().jahr() : 0;
     }
 
     public boolean istKorrigiert(Path video) {
@@ -201,14 +201,14 @@ public final class Vorschlaege {
             return film;
         }
         // Bei Serienfolgen bleiben Staffel und Folge erhalten, das Jahr ist dort nicht nötig.
-        boolean folge = film.erkannt() && film.info().istFolge();
+        boolean folge = film.info() != null && film.info().istFolge();
         FilmInfo info = null;
         if (!k.titel().isEmpty() && (k.jahr() > 0 || folge)) {
-            int aufloesung = film.erkannt() ? film.info().aufloesung()
+            int aufloesung = film.info() != null ? film.info().aufloesung()
                     : NamensErkennung.aufloesung(film.video().getFileName().toString().replace('.', ' '));
             info = folge
                     ? new FilmInfo(k.titel(), k.jahr(), aufloesung, film.info().staffel(), film.info().folge())
-                    : new FilmInfo(k.titel(), k.jahr(), aufloesung, 0, 0, film.erkannt() ? film.info().fassung()
+                    : new FilmInfo(k.titel(), k.jahr(), aufloesung, 0, 0, film.info() != null ? film.info().fassung()
                             : NamensErkennung.fassung(Dateinamen.ohneEndung(film.video().getFileName().toString())));
         }
         return new Film(film.video(), film.groesse(), info, film.begleitdateien());
