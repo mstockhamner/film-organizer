@@ -90,13 +90,45 @@ class ReceiverDatenTest {
     }
 
     @Test
-    void folgenDerselbenReiheSindKeineDoubletten() throws IOException {
-        aufnahme("20230820 0837 - zdf_neo - Terra X", "Terra X", "Eine Erde - viele Welten - Inseln");
-        aufnahme("20230820 0922 - zdf_neo - Terra X", "Terra X",
+    void folgenEinerSendereiheKommenInDenSerienordner() throws IOException {
+        Path ziel = quelle.resolve("Sammlung").toAbsolutePath().normalize();
+        Path inseln = aufnahme("20230820 0837 - zdf_neo - Terra X", "Terra X", "Eine Erde - viele Welten - Inseln");
+        Path anfang = aufnahme("20230820 0922 - zdf_neo - Terra X", "Terra X",
                 "Sternstunden der Evolution mit Dirk Steffens - 1. Der Anfang von allem");
-        List<Aktion> plan = Main.planErstellen(quelle, quelle.resolve("Sammlung"));
-        assertEquals(List.of(Art.UNERKANNT, Art.UNERKANNT), plan.stream().map(Aktion::art).toList());
-        assertTrue(plan.get(0).hinweis().startsWith("Folge einer Sendereihe: „Terra X“"));
+        Path drachen = aufnahme("20231009 1547 - TOGGO plus - Ninjago - Aufstieg der Drachen",
+                "Ninjago - Aufstieg der Drachen", "Die Verschmelzung: Teil 1 (1)");
+        Path nochmal = aufnahme("20231109 1547 - TOGGO plus - Ninjago - Aufstieg der Drachen",
+                "Ninjago - Aufstieg der Drachen", "Die Verschmelzung: Teil 1 (1)");
+
+        List<Aktion> plan = Main.planErstellen(quelle, ziel);
+        assertEquals(ziel.resolve("Serien/Terra X/Terra X - Eine Erde - viele Welten - Inseln.ts"), nach(plan, inseln));
+        assertEquals(ziel.resolve("Serien/Terra X/Terra X - Sternstunden der Evolution mit Dirk Steffens - 1. Der Anfang von allem.ts"),
+                nach(plan, anfang));
+        assertEquals(ziel.resolve("Serien/Ninjago - Aufstieg der Drachen/"
+                + "Ninjago - Aufstieg der Drachen - Die Verschmelzung - Teil 1 (1).ts"), nach(plan, drachen));
+        assertEquals(Art.DOUBLETTE, aktion(plan, nochmal).art(), "dieselbe Folge zweimal aufgenommen");
+
+        Ausfuehrung.ausfuehren(plan, ziel, new java.io.PrintStream(java.io.OutputStream.nullOutputStream()));
+        assertTrue(Files.exists(ziel.resolve("Serien/Terra X/Terra X - Eine Erde - viele Welten - Inseln.ts")));
+
+        // Beim nächsten Lauf sind die Folgen bekannt, auch von Hand abgelegte.
+        Path hand = ziel.resolve("Serien/Terra X/Terra X - Rätselhafte Phänomene.ts");
+        Files.writeString(hand, "von Hand abgelegt, größer als die neue Aufnahme".repeat(3));
+        Path wieder = aufnahme("20240101 1200 - zdf_neo - Terra X", "Terra X", "Eine Erde - viele Welten - Inseln");
+        Path raetsel = aufnahme("20240102 1200 - zdf_neo - Terra X", "Terra X", "Rätselhafte Phänomene");
+        List<Aktion> danach = Main.planErstellen(quelle, ziel);
+        assertEquals(Art.DOUBLETTE, aktion(danach, wieder).art());
+        assertEquals(Art.DOUBLETTE, aktion(danach, raetsel).art());
+    }
+
+    private static Aktion aktion(List<Aktion> plan, Path video) {
+        return plan.stream().filter(a -> a.film().video().equals(video)).findFirst().orElseThrow();
+    }
+
+    private static Path nach(List<Aktion> plan, Path video) {
+        Aktion a = aktion(plan, video);
+        assertEquals(Art.EINSORTIEREN, a.art(), a.hinweis());
+        return a.verschiebungen().get(0).nach();
     }
 
     @Test

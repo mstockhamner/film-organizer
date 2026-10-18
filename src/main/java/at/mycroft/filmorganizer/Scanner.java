@@ -76,8 +76,7 @@ public final class Scanner {
         Collections.sort(videos);
         List<Film> filme = new ArrayList<>();
         for (Path video : videos) {
-            FilmInfo info = erkennen(video, quelleAbs);
-            filme.add(new Film(video, Files.size(video), info, begleitdateien(video), info == null ? notiz(video) : ""));
+            filme.add(new Film(video, Files.size(video), erkennen(video, quelleAbs), begleitdateien(video)));
         }
         LOG.info(() -> filme.size() + " Videodateien in " + quelleAbs + " gefunden, davon "
                 + filme.stream().filter(Film::erkannt).count() + " mit erkanntem Titel und Jahr");
@@ -198,13 +197,15 @@ public final class Scanner {
      * Namen ist der Aufnahmetag. Das Erscheinungsjahr kommt aus dem Ordner, wenn er denselben Film mit Jahr
      * nennt ({@code The Greatest Showman (2017)/20200612 2226 - ATV HD - The Greatest Showman.ts}), sonst
      * aus der Beschreibung, z.B. "Thriller, USA 2017". Ohne Jahr bleibt es 0 und wird in der Vorschau
-     * nachgetragen. Folgen einer Sendereihe (Terra X, Ninjago …) sind keine Filme: {@code null}.
+     * nachgetragen. Folgen einer Sendereihe (Terra X, Ninjago …) sind keine Filme, sondern Folgen mit
+     * Folgentitel, abgelegt unter {@code Serien/Terra X/Terra X - Folgentitel}.
      */
     static FilmInfo aufnahmeErkennen(Path video, NamensErkennung.Aufnahme aufnahme) {
         ReceiverDaten daten = ReceiverDaten.lesen(video);
         String titel = daten.titel().isEmpty() ? aufnahme.titel() : daten.titel();
-        if (daten.folge(titel) != null) {
-            return null;
+        String folge = daten.folge(titel);
+        if (folge != null) {
+            return FilmInfo.sendung(titel, folge);
         }
         Path ordner = video.getParent();
         if (ordner != null && ordner.getFileName() != null) {
@@ -219,18 +220,6 @@ public final class Scanner {
             LOG.fine(() -> "Sat-Aufnahme ohne Erscheinungsjahr: " + video);
         }
         return new FilmInfo(titel, jahr, 0);
-    }
-
-    /** Erklärung für die Vorschau, wenn eine Sat-Aufnahme eine Folge einer Sendereihe ist, sonst leer. */
-    static String notiz(Path video) {
-        Optional<NamensErkennung.Aufnahme> aufnahme = NamensErkennung.erkennenAufnahme(Dateinamen.ohneEndung(name(video)));
-        if (aufnahme.isEmpty()) {
-            return "";
-        }
-        ReceiverDaten daten = ReceiverDaten.lesen(video);
-        String titel = daten.titel().isEmpty() ? aufnahme.get().titel() : daten.titel();
-        String folge = daten.folge(titel);
-        return folge == null ? "" : "Folge einer Sendereihe: „" + titel + "“ – " + folge + " (bleibt liegen)";
     }
 
     /** Auflösung und Fassung, die im Ordnernamen fehlen, stehen oft im Dateinamen. */

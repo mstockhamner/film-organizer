@@ -207,7 +207,7 @@ public final class Vorschlaege {
             int aufloesung = film.info() != null ? film.info().aufloesung()
                     : NamensErkennung.aufloesung(film.video().getFileName().toString().replace('.', ' '));
             info = folge
-                    ? new FilmInfo(k.titel(), k.jahr(), aufloesung, film.info().staffel(), film.info().folge())
+                    ? film.info().mitTitelUndJahr(k.titel(), k.jahr())
                     : new FilmInfo(k.titel(), k.jahr(), aufloesung, 0, 0, film.info() != null ? film.info().fassung()
                             : NamensErkennung.fassung(Dateinamen.ohneEndung(film.video().getFileName().toString())));
         }

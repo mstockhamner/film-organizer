@@ -55,12 +55,13 @@ public final class Katalog {
         if (Files.exists(datei)) {
             for (String zeile : Files.readAllLines(datei, StandardCharsets.UTF_8)) {
                 String[] teile = zeile.split("\t", -1);
-                // Ältere Kataloge haben noch keine Spalten für Staffel, Folge und Fassung.
-                if (teile.length == 5 || teile.length == 7 || teile.length == 8) {
+                // Ältere Kataloge haben noch keine Spalten für Staffel, Folge, Fassung und Folgentitel.
+                if (teile.length == 5 || teile.length >= 7 && teile.length <= 9) {
                     FilmInfo info = new FilmInfo(teile[0], Integer.parseInt(teile[1]), Integer.parseInt(teile[2]),
                             teile.length >= 7 ? Integer.parseInt(teile[5]) : 0,
                             teile.length >= 7 ? Integer.parseInt(teile[6]) : 0,
-                            teile.length == 8 ? teile[7] : "", reiheAusPfad(teile[3]));
+                            teile.length >= 8 ? teile[7] : "", reiheAusPfad(teile[3]),
+                            teile.length == 9 ? teile[8] : "");
                     eintraege.add(new Eintrag(info, teile[3], Long.parseLong(teile[4])));
                 }
             }
@@ -183,7 +184,10 @@ public final class Katalog {
         }
     }
 
-    /** Folgen nach dem Schema {@code Serien/Titel/Staffel 01/Titel - S01E02.<Endung>}. */
+    /**
+     * Folgen nach dem Schema {@code Serien/Titel/Staffel 01/Titel - S01E02.<Endung>} und Folgen einer
+     * Sendereihe nach {@code Serien/Titel/Titel - Folgentitel.<Endung>}.
+     */
     private void folgenErgaenzen() throws IOException {
         Path serien = ziel.resolve(FilmInfo.SERIEN);
         if (!Files.isDirectory(serien)) {
@@ -192,11 +196,20 @@ public final class Katalog {
         try (Stream<Path> dateien = Files.walk(serien, 3)) {
             for (Path datei : dateien.filter(Files::isRegularFile).sorted().toList()) {
                 String name = datei.getFileName().toString();
-                Matcher m = ZIELFOLGE.matcher(Dateinamen.ohneEndung(name));
-                if (!Dateinamen.istVideo(name) || !m.matches()) {
+                if (!Dateinamen.istVideo(name)) {
                     continue;
                 }
-                FilmInfo info = new FilmInfo(m.group(1), 0, 0, Integer.parseInt(m.group(2)), Integer.parseInt(m.group(3)));
+                String ohneEndung = Dateinamen.ohneEndung(name);
+                Matcher m = ZIELFOLGE.matcher(ohneEndung);
+                String reihe = datei.getParent().getFileName().toString();
+                FilmInfo info;
+                if (m.matches()) {
+                    info = new FilmInfo(m.group(1), 0, 0, Integer.parseInt(m.group(2)), Integer.parseInt(m.group(3)));
+                } else if (datei.getParent().getParent().equals(serien) && ohneEndung.startsWith(reihe + " - ")) {
+                    info = FilmInfo.sendung(reihe, ohneEndung.substring(reihe.length() + 3));
+                } else {
+                    continue;
+                }
                 if (finden(info.schluessel()) == null) {
                     eintraege.add(new Eintrag(info, ziel.relativize(datei).toString(), 0));
                 }
@@ -236,7 +249,8 @@ public final class Katalog {
             if (e.groesse() > 0) {
                 zeilen.add(String.join("\t", e.info().titel(), Integer.toString(e.info().jahr()),
                         Integer.toString(e.info().aufloesung()), e.video(), Long.toString(e.groesse()),
-                        Integer.toString(e.info().staffel()), Integer.toString(e.info().folge()), e.info().fassung()));
+                        Integer.toString(e.info().staffel()), Integer.toString(e.info().folge()), e.info().fassung(),
+                        e.info().folgentitel()));
             }
         }
         Files.write(verzeichnis.resolve(DATEI), zeilen, StandardCharsets.UTF_8);
