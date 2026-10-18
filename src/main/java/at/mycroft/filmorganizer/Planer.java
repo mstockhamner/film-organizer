@@ -499,7 +499,12 @@ public final class Planer {
             String original = teiltOrdner ? name + " - " + datei.getFileName() : datei.getFileName().toString();
             String endung = Dateinamen.endung(original);
             String wunsch;
-            if (Dateinamen.BILD.contains(endung)) {
+            String dateiname = datei.getFileName().toString();
+            String videoName = film.video().getFileName().toString();
+            if (Dateinamen.istReceiverDatei(dateiname, videoName)) {
+                // "Aufnahme.ts.meta" wird "Titel (Jahr).ts.meta", "Aufnahme.eit" wird "Titel (Jahr).eit".
+                wunsch = name + dateiname.substring(Dateinamen.ohneEndung(videoName).length());
+            } else if (Dateinamen.BILD.contains(endung)) {
                 wunsch = bilder != 1 ? original : teiltOrdner ? name + "." + endung : "poster." + endung;
             } else if (Dateinamen.UNTERTITEL.contains(endung)) {
                 String sprache = sprachkennung(original);

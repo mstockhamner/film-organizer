@@ -235,26 +235,31 @@ public final class Scanner {
 
     /**
      * Cover, Untertitel und .nfo im Ordner der Videodatei. Liegen mehrere Videos im selben
-     * Ordner, ist die Zuordnung unklar, dann werden keine Begleitdateien mitgenommen.
+     * Ordner, ist die Zuordnung unklar, dann werden diese nicht mitgenommen. Dateien eines Sat-Receivers
+     * gehören über ihren Namen eindeutig zur Aufnahme ({@code film.ts.meta}, {@code .ap}, {@code .sc},
+     * {@code .cuts}, {@code film.eit}) und werden immer mitgenommen.
      */
     static List<Path> begleitdateien(Path video) throws IOException {
         Path ordner = video.getParent();
         try (Stream<Path> inhalt = Files.list(ordner)) {
             List<Path> dateien = inhalt.filter(Files::isRegularFile).sorted().toList();
+            List<Path> receiver = dateien.stream().filter(p -> Dateinamen.istReceiverDatei(name(p), name(video))).toList();
             long anzahlVideos = dateien.stream()
                     .filter(p -> Dateinamen.istVideo(p.getFileName().toString()))
                     .filter(p -> !istSample(p))
                     .count();
             if (anzahlVideos != 1) {
-                return List.of();
+                return receiver;
             }
-            return dateien.stream()
+            List<Path> begleit = new ArrayList<>(dateien.stream()
                     .filter(p -> {
                         String endung = Dateinamen.endung(p.getFileName().toString());
                         return Dateinamen.BILD.contains(endung) || Dateinamen.UNTERTITEL.contains(endung)
                                 || Dateinamen.NFO.contains(endung);
                     })
-                    .toList();
+                    .toList());
+            begleit.addAll(receiver);
+            return begleit;
         } catch (UncheckedIOException e) {
             throw e.getCause();
         }

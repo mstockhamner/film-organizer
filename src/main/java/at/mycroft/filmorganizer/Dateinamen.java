@@ -46,4 +46,17 @@ public final class Dateinamen {
     static boolean istVideo(String dateiname) {
         return VIDEO.contains(endung(dateiname));
     }
+
+    /** Endungen der Dateien, die ein Sat-Receiver (Enigma2) neben einer Aufnahme anlegt. */
+    static final Set<String> RECEIVER = Set.of("meta", "ap", "sc", "cuts", "eit");
+
+    /**
+     * Ob {@code dateiname} eine Receiver-Datei der Aufnahme {@code video} ist: {@code video.meta},
+     * {@code video.ap}, {@code video.sc}, {@code video.cuts} oder {@code video-ohne-Endung.eit}.
+     */
+    static boolean istReceiverDatei(String dateiname, String video) {
+        String endung = endung(dateiname);
+        return RECEIVER.contains(endung)
+                && (dateiname.equals(video + "." + endung) || dateiname.equals(ohneEndung(video) + "." + endung));
+    }
 }

@@ -33,6 +33,25 @@ class SatAufnahmeTest {
     }
 
     @Test
+    void receiverDateienWandernMitUndHeissenWieDerFilm() throws IOException {
+        Path video = datei("movie/20200612 2226 - ATV HD - The Greatest Showman.ts", "video");
+        Files.writeString(video.resolveSibling(video.getFileName() + ".meta"),
+                "1:0:19:2F:9:85:C00000:0:0:0::ATV HD\nThe Greatest Showman\nThe Greatest Showman\\nThriller, USA 2017\n");
+        for (String endung : List.of(".ts.ap", ".ts.sc", ".ts.cuts", ".eit")) {
+            datei("movie/20200612 2226 - ATV HD - The Greatest Showman" + endung, endung);
+        }
+        // Eine zweite Aufnahme im selben Ordner: ihre Dateien bleiben bei ihr.
+        datei("movie/20210110 1232 - PULS 4 Austria - Ready Player One.ts", "anderes video");
+        datei("movie/20210110 1232 - PULS 4 Austria - Ready Player One.ts.ap", "ap");
+
+        Aktion aktion = aktion(video);
+        List<String> ziele = aktion.verschiebungen().stream().map(v -> v.nach().getFileName().toString()).sorted().toList();
+        assertEquals(List.of("The Greatest Showman (2017).eit", "The Greatest Showman (2017).ts",
+                "The Greatest Showman (2017).ts.ap", "The Greatest Showman (2017).ts.cuts",
+                "The Greatest Showman (2017).ts.meta", "The Greatest Showman (2017).ts.sc"), ziele);
+    }
+
+    @Test
     void jahrAusDerEitDatei() throws IOException {
         Path video = datei("movie/20191224 2015 - ORF1 HD - Kevin - Allein zu Haus.ts", "video");
         byte[] eit = ("\u0000\u0012\u0004 Kevin - Allein zu Haus \u0005Familienkomödie, USA 1990 \u0000")
