@@ -57,8 +57,9 @@ public final class Ausfuehrung {
     }
 
     /**
-     * Führt alle {@link Art#EINSORTIEREN}- und {@link Art#ERSETZEN}-Aktionen aus, verschiebt Doubletten
-     * in die Quarantäne und gibt die Anzahl einsortierter Filme zurück (ersetzte mitgezählt). Gibt es
+     * Führt alle {@link Art#EINSORTIEREN}-, {@link Art#ERSETZEN}- und {@link Art#UMSORTIEREN}-Aktionen aus,
+     * verschiebt Doubletten in die Quarantäne und gibt die Anzahl einsortierter Filme zurück (ersetzte
+     * mitgezählt, umsortierte nicht). Gibt es
      * Doubletten oder andere Fassungen, wird zusätzlich ein Doublettenbericht geschrieben.
      */
     public static int ausfuehren(List<Aktion> plan, Path ziel, PrintStream ausgabe) throws IOException {
@@ -73,7 +74,8 @@ public final class Ausfuehrung {
         try (BufferedWriter schreiber = Files.newBufferedWriter(protokoll, StandardCharsets.UTF_8,
                 StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
             for (Aktion aktion : plan) {
-                if (aktion.art() != Art.EINSORTIEREN && aktion.art() != Art.ERSETZEN && !aktion.inQuarantaene()) {
+                if (aktion.art() != Art.EINSORTIEREN && aktion.art() != Art.ERSETZEN && aktion.art() != Art.UMSORTIEREN
+                        && !aktion.inQuarantaene()) {
                     continue;
                 }
                 for (Verschiebung v : aktion.verschiebungen()) {
@@ -82,6 +84,14 @@ public final class Ausfuehrung {
                     schreiber.write(v.von() + "\t" + v.nach());
                     schreiber.newLine();
                     schreiber.flush();
+                }
+                if (aktion.art() == Art.UMSORTIEREN) {
+                    String ordner = ziel.relativize(aktion.verschiebungen().get(0).von()).getName(0).toString();
+                    leereOrdnerEntfernen(ziel.resolve(ordner));
+                    katalog.umziehen(ordner, aktion.film().info().reihe());
+                    katalog.speichern();
+                    ausgabe.println("umsortiert: " + ordner + " -> " + Dateinamen.bereinigen(aktion.film().info().reihe()));
+                    continue;
                 }
                 Path video = aktion.verschiebungen().stream().filter(v -> v.von().equals(aktion.film().video()))
                         .findFirst().orElseThrow().nach();
@@ -197,6 +207,24 @@ public final class Ausfuehrung {
         }
         Files.move(teil, nach);
         Files.delete(von);
+    }
+
+    /** Entfernt einen umsortierten Filmordner samt Unterordnern, soweit sie leer sind. */
+    private static void leereOrdnerEntfernen(Path ordner) throws IOException {
+        if (!Files.isDirectory(ordner)) {
+            return;
+        }
+        List<Path> ordnerZuerstDieTiefsten;
+        try (Stream<Path> alle = Files.walk(ordner)) {
+            ordnerZuerstDieTiefsten = alle.filter(Files::isDirectory).sorted(Comparator.reverseOrder()).toList();
+        }
+        for (Path o : ordnerZuerstDieTiefsten) {
+            try {
+                Files.deleteIfExists(o);
+            } catch (DirectoryNotEmptyException e) {
+                // Enthält noch etwas, bleibt stehen.
+            }
+        }
     }
 
     /** Entfernt leere Ordner bis hinauf zum Ziel, z.B. Staffel-, Serien- und Filmordner. */

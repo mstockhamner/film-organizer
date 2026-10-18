@@ -6,6 +6,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -23,6 +25,9 @@ public final class Katalog {
     static final String VERWALTUNG = ".filmorganizer";
     private static final String DATEI = "katalog.tsv";
     private static final Pattern ZIELORDNER = Pattern.compile("^(.+) \\((\\d{4})\\)$");
+    /** Ordner im Ziel, die weder Film noch Filmreihe sind (in Kleinbuchstaben). */
+    private static final Set<String> SONDERORDNER = Set.of(FilmInfo.SERIEN.toLowerCase(Locale.ROOT),
+            Planer.QUARANTAENE.toLowerCase(Locale.ROOT), VERWALTUNG, "#recycle", "@eadir");
     private static final Pattern ZIELFOLGE = Pattern.compile("^(.+) - S(\\d{2,})E(\\d{2,})$");
 
     /**
@@ -54,7 +59,7 @@ public final class Katalog {
                     FilmInfo info = new FilmInfo(teile[0], Integer.parseInt(teile[1]), Integer.parseInt(teile[2]),
                             teile.length >= 7 ? Integer.parseInt(teile[5]) : 0,
                             teile.length >= 7 ? Integer.parseInt(teile[6]) : 0,
-                            teile.length == 8 ? teile[7] : "");
+                            teile.length == 8 ? teile[7] : "", reiheAusPfad(teile[3]));
                     eintraege.add(new Eintrag(info, teile[3], Long.parseLong(teile[4])));
                 }
             }
@@ -70,17 +75,61 @@ public final class Katalog {
         }
         try (Stream<Path> ordner = Files.list(ziel)) {
             for (Path o : ordner.filter(Files::isDirectory).sorted().toList()) {
-                Matcher m = ZIELORDNER.matcher(o.getFileName().toString());
-                if (!m.matches()) {
-                    continue;
-                }
-                FilmInfo info = new FilmInfo(m.group(1), Integer.parseInt(m.group(2)), 0);
-                if (finden(info.schluessel()) == null) {
-                    eintraege.add(new Eintrag(info, ziel.relativize(o).toString(), 0));
+                String name = o.getFileName().toString();
+                if (ZIELORDNER.matcher(name).matches()) {
+                    filmordnerErgaenzen(o, "");
+                } else if (!SONDERORDNER.contains(name.toLowerCase(Locale.ROOT))) {
+                    // Ordner einer Filmreihe, z.B. "Harry Potter/Harry Potter und … (2001)".
+                    try (Stream<Path> filme = Files.list(o)) {
+                        for (Path film : filme.filter(Files::isDirectory).sorted().toList()) {
+                            filmordnerErgaenzen(film, name);
+                        }
+                    }
                 }
             }
         }
         folgenErgaenzen();
+    }
+
+    private void filmordnerErgaenzen(Path ordner, String reihe) {
+        Matcher m = ZIELORDNER.matcher(ordner.getFileName().toString());
+        if (!m.matches()) {
+            return;
+        }
+        FilmInfo info = new FilmInfo(m.group(1), Integer.parseInt(m.group(2)), 0, 0, 0, "", reihe);
+        if (finden(info.schluessel()) == null) {
+            eintraege.add(new Eintrag(info, ziel.relativize(ordner).toString(), 0));
+        }
+    }
+
+    /**
+     * Filmreihe aus dem Pfad relativ zum Ziel: {@code Harry Potter/Harry Potter und … (2001)/…} liegt in
+     * der Reihe {@code Harry Potter}, {@code Der Pate (1972)/…} in keiner.
+     */
+    static String reiheAusPfad(String video) {
+        Path pfad = Path.of(video);
+        if (pfad.getNameCount() < 2) {
+            return "";
+        }
+        String erster = pfad.getName(0).toString();
+        return ZIELORDNER.matcher(erster).matches() || SONDERORDNER.contains(erster.toLowerCase(Locale.ROOT))
+                ? "" : erster;
+    }
+
+    /**
+     * Verschiebt im Katalog alle Einträge aus dem Filmordner {@code ordner} (direkt im Ziel) in den
+     * Ordner der Filmreihe {@code reihe}.
+     */
+    public void umziehen(String ordner, String reihe) {
+        String reihenOrdner = Dateinamen.bereinigen(reihe);
+        for (int i = 0; i < eintraege.size(); i++) {
+            Eintrag e = eintraege.get(i);
+            Path pfad = Path.of(e.video());
+            if (pfad.getName(0).toString().equals(ordner)) {
+                eintraege.set(i, new Eintrag(e.info().mitReihe(reihe),
+                        Path.of(reihenOrdner).resolve(pfad).toString(), e.groesse()));
+            }
+        }
     }
 
     /** Folgen nach dem Schema {@code Serien/Titel/Staffel 01/Titel - S01E02.<Endung>}. */

@@ -35,6 +35,8 @@ public record Aktion(Art art, Film film, List<Verschiebung> verschiebungen, Stri
         DOUBLETTE,
         /** Bessere Fassung: die vorhandene kommt in die Quarantäne, die neue an ihren Platz. */
         ERSETZEN,
+        /** Film aus der Sammlung, der in den Ordner seiner Filmreihe verschoben wird. */
+        UMSORTIEREN,
         /**
          * Andere Fassung eines vorhandenen Films (z.B. Extended neben der Kinofassung). Bleibt liegen,
          * bis in der Vorschau entschieden ist, ob beide behalten werden.

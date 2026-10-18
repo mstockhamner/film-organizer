@@ -136,6 +136,7 @@ public final class Main {
             case DOUBLETTE -> "Doubletten (identische und schlechtere kommen nach " + Planer.QUARANTAENE
                     + ", andere bleiben liegen)";
             case ERSETZEN -> "Bessere Fassungen, ersetzen die vorhandene (die alte kommt nach " + Planer.QUARANTAENE + ")";
+            case UMSORTIEREN -> "Filme aus der Sammlung, die in den Ordner ihrer Filmreihe kommen";
             case FASSUNG -> "Andere Fassungen eines vorhandenen Films, Rückfrage beim Ausführen";
             case UNERKANNT -> "Nicht erkannt, bleiben liegen";
             case KONFLIKT -> "Konflikte, bleiben liegen";
@@ -156,8 +157,9 @@ public final class Main {
         }
         long anzahl = plan.stream().filter(a -> a.art() == Art.EINSORTIEREN).count();
         long ersetzt = plan.stream().filter(a -> a.art() == Art.ERSETZEN).count();
+        long umsortiert = plan.stream().filter(a -> a.art() == Art.UMSORTIEREN).count();
         long quarantaene = plan.stream().filter(Aktion::inQuarantaene).count();
-        if (anzahl == 0 && ersetzt == 0 && quarantaene == 0) {
+        if (anzahl == 0 && ersetzt == 0 && umsortiert == 0 && quarantaene == 0) {
             aus.println("Nichts einzusortieren.");
             return;
         }
@@ -168,7 +170,8 @@ public final class Main {
         }
         aus.print(anzahl + " Filme einsortieren, " + ersetzt + " vorhandene durch bessere Fassungen ersetzen "
                 + "(die alten kommen nach " + Planer.QUARANTAENE + ") und " + quarantaene + " Doubletten nach "
-                + Planer.QUARANTAENE + " verschieben? Zum Bestätigen \"ja\" eingeben: ");
+                + Planer.QUARANTAENE + " verschieben, " + umsortiert + " Filme der Sammlung in ihre Filmreihe "
+                + "umsortieren? Zum Bestätigen \"ja\" eingeben: ");
         aus.flush();
         String antwort = ein.readLine();
         if (antwort == null || !antwort.trim().equalsIgnoreCase("ja")) {

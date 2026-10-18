@@ -91,12 +91,30 @@ class PlanTabelleTest {
     }
 
     @Test
+    void filmreiheLaesstSichAendern() throws IOException {
+        Path ziel = quelle.resolve("Sammlung");
+        datei("Shrek.2001.German.1080p/shrek.mkv");
+        datei("Shrek.2.2004.German.1080p/shrek2.mkv");
+        PlanTabelle tabelle = new PlanTabelle();
+        tabelle.anzeigen(Vorschlaege.einlesen(quelle, ziel), quelle);
+        int shrek = 1; // nach Fundort sortiert: "Shrek.2.2004" vor "Shrek.2001"
+        assertEquals("Shrek", tabelle.getValueAt(shrek, PlanTabelle.REIHE));
+        assertEquals(Path.of("Shrek", "Shrek (2001)", "Shrek (2001).mkv").toString(),
+                tabelle.getValueAt(shrek, PlanTabelle.NEUER_ORT));
+        assertTrue(tabelle.isCellEditable(shrek, PlanTabelle.REIHE));
+
+        tabelle.setValueAt("", shrek, PlanTabelle.REIHE);
+        assertEquals("", tabelle.getValueAt(shrek, PlanTabelle.REIHE));
+        assertEquals(Path.of("Shrek (2001)", "Shrek (2001).mkv").toString(), tabelle.getValueAt(shrek, PlanTabelle.NEUER_ORT));
+    }
+
+    @Test
     void zusammenfassungZaehltNachArt() {
         Film f = new Film(quelle.resolve("a.mkv"), 1, null, List.of());
         assertEquals("Keine Filme gefunden.", Fenster.zusammenfassung(List.of()));
         assertTrue(Fenster.zusammenfassung(List.of(new Aktion(Art.UNERKANNT, f, List.of(), "")))
                 .startsWith("0 werden einsortiert, 0 Doubletten (davon 0 in Quarantäne), "
-                        + "0 ersetzen vorhandene, 0 andere Fassungen zu entscheiden, 1 nicht erkannt, "
+                        + "0 ersetzen vorhandene, 0 werden in Filmreihen umsortiert, 0 andere Fassungen zu entscheiden, 1 nicht erkannt, "
                         + "0 Konflikte, 0 ausgelassen."));
     }
 

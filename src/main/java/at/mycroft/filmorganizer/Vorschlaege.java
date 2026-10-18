@@ -25,6 +25,7 @@ public final class Vorschlaege {
     private final Map<Path, Korrektur> korrekturen = new HashMap<>();
     private final Set<Path> ausgelassen = new HashSet<>();
     private final Map<Path, Entscheidung> entscheidungen = new HashMap<>();
+    private final Map<Path, String> reihen = new HashMap<>();
 
     /** Von Hand eingetragener Titel und Jahr; leerer Titel oder Jahr 0 heißt "noch unvollständig". */
     private record Korrektur(String titel, int jahr) {
@@ -103,9 +104,24 @@ public final class Vorschlaege {
                 zuPlanen.add(mitKorrektur(film));
             }
         }
-        aktionen.addAll(Planer.planen(zuPlanen, katalog, ziel, entscheidungen));
+        for (Aktion aktion : Planer.planen(zuPlanen, katalog, ziel, entscheidungen, reihen)) {
+            // Auch das Umsortieren eines Films aus der Sammlung lässt sich abwählen.
+            aktionen.add(aktion.art() == Art.UMSORTIEREN && ausgelassen.contains(aktion.film().video())
+                    ? new Aktion(Art.AUSGELASSEN, aktion.film(), List.of(), "abgewählt, bleibt an seinem Platz")
+                    : aktion);
+        }
         aktionen.sort(Comparator.comparing(a -> a.film().video()));
         return aktionen;
+    }
+
+    /** Setzt die Filmreihe eines Films von Hand; leer heißt "gehört zu keiner Reihe". */
+    public void reiheSetzen(Path video, String reihe) {
+        reihen.put(video, reihe == null ? "" : reihe.trim());
+    }
+
+    /** Ob der Film beim Einlesen in der Quelle gefunden wurde (und nicht schon in der Sammlung liegt). */
+    public boolean istGescannt(Path video) {
+        return gescannt.stream().anyMatch(f -> f.video().equals(video));
     }
 
     private Film mitKorrektur(Film film) {

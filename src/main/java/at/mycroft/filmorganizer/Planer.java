@@ -43,14 +43,19 @@ public final class Planer {
     private final Map<Path, String> pruefsummen = new HashMap<>();
 
     private final Map<Path, Entscheidung> entscheidungen;
+    /** Von Hand gesetzte Filmreihen je Videodatei; leer heißt "keine Reihe". */
+    private final Map<Path, String> reihenVorgaben;
+    /** Erkannte Filmreihe je normalisiertem Titel. */
+    private Map<String, String> erkannteReihen = Map.of();
     /** In diesem Lauf zum Einsortieren vorgesehene Filme, damit weitere Fassungen sie als vorhanden sehen. */
     private final List<Katalog.Eintrag> eingeplant = new ArrayList<>();
 
-    private Planer(Path ziel, Katalog katalog, Map<Path, Entscheidung> entscheidungen) {
+    private Planer(Path ziel, Katalog katalog, Map<Path, Entscheidung> entscheidungen, Map<Path, String> reihen) {
         this.ziel = ziel;
         this.quarantaene = ziel.resolve(QUARANTAENE).resolve(LocalDate.now().toString());
         this.katalog = katalog;
         this.entscheidungen = entscheidungen;
+        this.reihenVorgaben = reihen;
     }
 
     public static List<Aktion> planen(List<Film> filme, Katalog katalog, Path ziel) throws IOException {
@@ -60,11 +65,18 @@ public final class Planer {
     /** Wie {@link #planen(List, Katalog, Path)}, mit den Entscheidungen zu anderen Fassungen je Videodatei. */
     public static List<Aktion> planen(List<Film> filme, Katalog katalog, Path ziel,
             Map<Path, Entscheidung> entscheidungen) throws IOException {
-        return new Planer(ziel, katalog, entscheidungen).planen(filme);
+        return planen(filme, katalog, ziel, entscheidungen, Map.of());
+    }
+
+    /** Wie oben, zusätzlich mit von Hand gesetzten Filmreihen je Videodatei (leer: keine Reihe). */
+    public static List<Aktion> planen(List<Film> filme, Katalog katalog, Path ziel,
+            Map<Path, Entscheidung> entscheidungen, Map<Path, String> reihen) throws IOException {
+        return new Planer(ziel, katalog, entscheidungen, reihen).planen(filme);
     }
 
     private List<Aktion> planen(List<Film> filme) throws IOException {
         List<Aktion> aktionen = new ArrayList<>();
+        erkannteReihen = reihenErkennen(filme);
 
         // 1. Doubletten innerhalb des Imports: gleicher Titel, gleiches Jahr und gleiche Fassung.
         Map<String, List<Film>> nachSchluessel = new LinkedHashMap<>();
@@ -111,19 +123,114 @@ public final class Planer {
         //    damit sie einsortiert wird und weitere Fassungen desselben Films nachgefragt werden.
         eindeutig.sort(BESSER_ZUERST);
         for (Film film : eindeutig) {
-            Aktion aktion = gegenSammlung(film);
+            Aktion aktion = gegenSammlung(mitReihe(film, reiheFuer(film.video(), film.info())));
             if (aktion.art() == Art.EINSORTIEREN) {
-                eingeplant.add(new Katalog.Eintrag(film.info(),
+                eingeplant.add(new Katalog.Eintrag(aktion.film().info(),
                         ziel.relativize(aktion.verschiebungen().get(0).nach()).toString(), film.groesse()));
             }
             aktionen.add(aktion);
         }
+
+        // 4. Filme aus der Sammlung, die jetzt zu einer Filmreihe gehören, in deren Ordner umsortieren.
+        aktionen.addAll(umsortieren(aktionen));
         return aktionen;
     }
 
-    private Aktion gegenSammlung(Film film) throws IOException {
-        List<Katalog.Eintrag> fassungen = new ArrayList<>(katalog.alle(film.info().schluessel()));
-        eingeplant.stream().filter(e -> e.info().schluessel().equals(film.info().schluessel())).forEach(fassungen::add);
+    /**
+     * Erkennt Filmreihen über alle Filme des Imports und der Sammlung. Hat eine Reihe in der Sammlung
+     * schon einen Ordner (auch einen von Hand benannten), behält sie dessen Namen.
+     */
+    private Map<String, String> reihenErkennen(List<Film> filme) {
+        List<String> titel = new ArrayList<>();
+        filme.stream().filter(f -> f.erkannt() && !f.info().istFolge()).forEach(f -> titel.add(f.info().titel()));
+        List<Katalog.Eintrag> sammlung = katalog.eintraege().stream().filter(e -> !e.info().istFolge()).toList();
+        sammlung.forEach(e -> titel.add(e.info().titel()));
+        Map<String, String> reihen = new HashMap<>(Filmreihen.erkennen(titel));
+        Map<String, String> vorhandeneNamen = new HashMap<>();
+        for (Katalog.Eintrag e : sammlung) {
+            String erkannt = reihen.get(FilmInfo.normalisieren(e.info().titel()));
+            if (!e.info().reihe().isEmpty()) {
+                if (erkannt != null) {
+                    vorhandeneNamen.putIfAbsent(FilmInfo.normalisieren(erkannt), e.info().reihe());
+                }
+                reihen.put(FilmInfo.normalisieren(e.info().titel()), e.info().reihe());
+            }
+        }
+        reihen.replaceAll((t, r) -> vorhandeneNamen.getOrDefault(FilmInfo.normalisieren(r), r));
+        return reihen;
+    }
+
+    /** Von Hand gesetzte Reihe, sonst die erkannte; bei Serienfolgen keine. */
+    private String reiheFuer(Path video, FilmInfo info) {
+        if (info.istFolge()) {
+            return "";
+        }
+        String vorgabe = reihenVorgaben.get(video);
+        return vorgabe != null ? vorgabe.trim() : erkannteReihen.getOrDefault(FilmInfo.normalisieren(info.titel()), "");
+    }
+
+    private static Film mitReihe(Film film, String reihe) {
+        return new Film(film.video(), film.groesse(), film.info().mitReihe(reihe), film.begleitdateien());
+    }
+
+    /**
+     * Filme, die direkt im Ziel liegen und zu einer Filmreihe gehören, kommen mit ihrem ganzen Ordner
+     * in den Ordner der Reihe. Ordner, in die in diesem Lauf etwas einsortiert wird, bleiben bis zum
+     * nächsten Lauf, wo sie sind.
+     */
+    private List<Aktion> umsortieren(List<Aktion> geplant) throws IOException {
+        Set<Path> belegt = new HashSet<>();
+        for (Aktion a : geplant) {
+            for (Verschiebung v : a.verschiebungen()) {
+                belegt.add(v.nach().getParent());
+                belegt.add(v.von().getParent());
+            }
+        }
+        List<Aktion> aktionen = new ArrayList<>();
+        Set<Path> erledigt = new HashSet<>();
+        for (Katalog.Eintrag e : katalog.eintraege()) {
+            if (e.info().istFolge() || !e.info().reihe().isEmpty()) {
+                continue;
+            }
+            Path ordner = ziel.resolve(Path.of(e.video()).getName(0).toString());
+            if (!Files.isDirectory(ordner) || belegt.contains(ordner) || !erledigt.add(ordner)) {
+                continue;
+            }
+            Path alt = alteDatei(e);
+            Path anzeige = alt != null ? alt : ordner;
+            String reihe = reiheFuer(anzeige, e.info());
+            Film film = new Film(anzeige, alt != null ? Files.size(alt) : 0, e.info().mitReihe(reihe), List.of());
+            if (reihe.isEmpty()) {
+                if (reihenVorgaben.containsKey(anzeige)) {
+                    aktionen.add(new Aktion(Art.AUSGELASSEN, film, List.of(), "bleibt ohne Filmreihe an seinem Platz"));
+                }
+                continue;
+            }
+            Path neu = ziel.resolve(Dateinamen.bereinigen(reihe)).resolve(ordner.getFileName());
+            if (Files.exists(neu)) {
+                aktionen.add(new Aktion(Art.KONFLIKT, film, List.of(), "Zielordner existiert schon: " + neu));
+                continue;
+            }
+            List<Verschiebung> verschiebungen = new ArrayList<>();
+            try (Stream<Path> dateien = Files.walk(ordner)) {
+                for (Path datei : dateien.filter(Files::isRegularFile).sorted().toList()) {
+                    verschiebungen.add(new Verschiebung(datei, neu.resolve(ordner.relativize(datei))));
+                }
+            }
+            if (!verschiebungen.isEmpty()) {
+                aktionen.add(new Aktion(Art.UMSORTIEREN, film, verschiebungen, "gehört zur Filmreihe " + reihe));
+            }
+        }
+        return aktionen;
+    }
+
+    private Aktion gegenSammlung(Film neuerFilm) throws IOException {
+        List<Katalog.Eintrag> fassungen = new ArrayList<>(katalog.alle(neuerFilm.info().schluessel()));
+        eingeplant.stream().filter(e -> e.info().schluessel().equals(neuerFilm.info().schluessel()))
+                .forEach(fassungen::add);
+        // Weitere Fassungen und Ersatz kommen in den Ordner, in dem der Film schon liegt.
+        Film film = fassungen.isEmpty() || neuerFilm.info().istFolge() ? neuerFilm
+                : mitReihe(neuerFilm, fassungen.get(0).info().reihe());
         Katalog.Eintrag vorhanden = fassungen.stream()
                 .filter(e -> e.info().fassungsSchluessel().equals(film.info().fassungsSchluessel()))
                 .findFirst().orElse(null);

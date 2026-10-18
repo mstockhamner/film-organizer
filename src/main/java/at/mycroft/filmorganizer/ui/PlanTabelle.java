@@ -23,12 +23,14 @@ final class PlanTabelle extends AbstractTableModel {
     static final int GEFUNDEN = 4;
     static final int NEUER_ORT = 5;
     static final int ENTSCHEIDUNG = 6;
+    static final int REIHE = 7;
 
     static final String IN_QUARANTAENE = "Doublette → Quarantäne";
     static final String ERSETZT = "Ersetzt vorhandene";
+    static final String UMSORTIERT = "Wird umsortiert";
 
     private static final String[] SPALTEN = {"Übernehmen", "Status", "Titel", "Jahr", "Gefunden in",
-        "Neuer Ort / Hinweis", "Entscheidung"};
+        "Neuer Ort / Hinweis", "Entscheidung", "Filmreihe"};
 
     private Vorschlaege vorschlaege;
     private List<Aktion> plan = List.of();
@@ -87,8 +89,12 @@ final class PlanTabelle extends AbstractTableModel {
 
     @Override
     public boolean isCellEditable(int zeile, int spalte) {
-        return spalte == UEBERNEHMEN || spalte == TITEL || spalte == JAHR
-                || spalte == ENTSCHEIDUNG && !plan.get(zeile).auswahl().isEmpty();
+        Aktion aktion = plan.get(zeile);
+        // Titel und Jahr nur bei Filmen aus der Quelle; Filme aus der Sammlung behalten ihren Namen.
+        boolean ausQuelle = vorschlaege.istGescannt(aktion.film().video());
+        return spalte == UEBERNEHMEN || (spalte == TITEL || spalte == JAHR) && ausQuelle
+                || spalte == ENTSCHEIDUNG && !aktion.auswahl().isEmpty()
+                || spalte == REIHE && mitReihe(aktion, ausQuelle);
     }
 
     @Override
@@ -104,7 +110,8 @@ final class PlanTabelle extends AbstractTableModel {
             }
             case GEFUNDEN -> relativ(quelle, aktion.film().video());
             case ENTSCHEIDUNG -> aktion.auswahl().isEmpty() ? "" : text(aktion, aktion.entscheidung());
-            default -> aktion.art() == Aktion.Art.EINSORTIEREN
+            case REIHE -> aktion.film().erkannt() ? aktion.film().info().reihe() : "";
+            default -> aktion.art() == Aktion.Art.EINSORTIEREN || aktion.art() == Aktion.Art.UMSORTIEREN
                     ? relativ(vorschlaege.ziel(), neuerOrt(aktion))
                     : aktion.art() == Aktion.Art.ERSETZEN || aktion.inQuarantaene()
                     ? relativ(vorschlaege.ziel(), neuerOrt(aktion)) + " (" + aktion.hinweis() + ")"
@@ -121,6 +128,7 @@ final class PlanTabelle extends AbstractTableModel {
             case TITEL -> vorschlaege.korrigieren(video, String.valueOf(wert), vorschlaege.jahr(aktion.film()));
             case JAHR -> vorschlaege.korrigieren(video, vorschlaege.titel(aktion.film()),
                     wert instanceof Integer jahr ? jahr : 0);
+            case REIHE -> vorschlaege.reiheSetzen(video, wert == null ? "" : String.valueOf(wert));
             case ENTSCHEIDUNG -> {
                 for (Entscheidung e : aktion.auswahl()) {
                     if (text(aktion, e).equals(String.valueOf(wert))) {
@@ -154,7 +162,13 @@ final class PlanTabelle extends AbstractTableModel {
     /** Wohin das Video kommt: in die Sammlung oder in die Quarantäne. */
     private static Path neuerOrt(Aktion aktion) {
         return aktion.verschiebungen().stream().filter(v -> v.von().equals(aktion.film().video()))
-                .findFirst().orElseThrow().nach();
+                .findFirst().orElse(aktion.verschiebungen().get(0)).nach();
+    }
+
+    /** Die Filmreihe lässt sich bei Filmen ändern, die einsortiert oder in der Sammlung umsortiert werden. */
+    private static boolean mitReihe(Aktion aktion, boolean ausQuelle) {
+        return aktion.film().erkannt() && !aktion.film().info().istFolge()
+                && (aktion.art() == Aktion.Art.EINSORTIEREN || !ausQuelle);
     }
 
     private String hinweis(Aktion aktion) {
@@ -177,6 +191,7 @@ final class PlanTabelle extends AbstractTableModel {
             case EINSORTIEREN -> "Wird einsortiert";
             case DOUBLETTE -> "Doublette";
             case ERSETZEN -> ERSETZT;
+            case UMSORTIEREN -> UMSORTIERT;
             case FASSUNG -> "Andere Fassung";
             case UNERKANNT -> "Nicht erkannt";
             case KONFLIKT -> "Konflikt";

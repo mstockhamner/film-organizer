@@ -145,7 +145,7 @@ public final class Fenster extends JFrame {
         ansicht.setFillsViewportHeight(true);
         ansicht.setRowHeight(ansicht.getRowHeight() + 4);
         ansicht.putClientProperty("terminateEditOnFocusLost", Boolean.TRUE);
-        int[] breiten = {80, 110, 240, 60, 300, 330, 120};
+        int[] breiten = {80, 110, 240, 60, 280, 320, 120, 140};
         for (int spalte = 0; spalte < breiten.length; spalte++) {
             ansicht.getColumnModel().getColumn(spalte).setPreferredWidth(breiten[spalte]);
         }
@@ -219,7 +219,8 @@ public final class Fenster extends JFrame {
 
     private void nachAenderung() {
         List<Aktion> plan = tabelle.plan();
-        einsortieren.setEnabled(anzahl(plan, Art.EINSORTIEREN) + anzahl(plan, Art.ERSETZEN) + quarantaene(plan) > 0);
+        einsortieren.setEnabled(anzahl(plan, Art.EINSORTIEREN) + anzahl(plan, Art.ERSETZEN)
+                + anzahl(plan, Art.UMSORTIEREN) + quarantaene(plan) > 0);
         status.setText(zusammenfassung(plan));
     }
 
@@ -228,12 +229,14 @@ public final class Fenster extends JFrame {
         Path z = tabelle.ziel();
         long anzahl = anzahl(plan, Art.EINSORTIEREN);
         long ersetzt = anzahl(plan, Art.ERSETZEN);
+        long umsortiert = anzahl(plan, Art.UMSORTIEREN);
         long quarantaene = quarantaene(plan);
         long offen = plan.stream().filter(Aktion::offen).count();
         int antwort = JOptionPane.showConfirmDialog(this,
                 anzahl + " Filme nach\n" + z + "\nverschieben?\n\n"
                         + (ersetzt == 0 ? "" : ersetzt + " vorhandene Filme werden durch bessere Fassungen ersetzt, "
                                 + "die alten kommen in die Quarantäne.\n")
+                        + (umsortiert == 0 ? "" : umsortiert + " Filme der Sammlung kommen in den Ordner ihrer Filmreihe.\n")
                         + quarantaene + " Doubletten kommen in die Quarantäne " + z.resolve(Planer.QUARANTAENE) + ".\n"
                         + (offen == 0 ? "" : offen + " andere Fassungen (z.B. Extended neben der Kinofassung) sind noch "
                                 + "nicht entschieden und bleiben liegen.\n")
@@ -323,6 +326,7 @@ public final class Fenster extends JFrame {
         return anzahl(plan, Art.EINSORTIEREN) + " werden einsortiert, "
                 + anzahl(plan, Art.DOUBLETTE) + " Doubletten (davon " + quarantaene(plan) + " in Quarantäne), "
                 + anzahl(plan, Art.ERSETZEN) + " ersetzen vorhandene, "
+                + anzahl(plan, Art.UMSORTIEREN) + " werden in Filmreihen umsortiert, "
                 + plan.stream().filter(Aktion::offen).count() + " andere Fassungen zu entscheiden, "
                 + anzahl(plan, Art.UNERKANNT) + " nicht erkannt, "
                 + anzahl(plan, Art.KONFLIKT) + " Konflikte, " + anzahl(plan, Art.AUSGELASSEN) + " ausgelassen. "
@@ -360,7 +364,7 @@ public final class Fenster extends JFrame {
             Component c = super.getTableCellRendererComponent(table, wert, ausgewaehlt, fokus, zeile, spalte);
             if (!ausgewaehlt) {
                 c.setForeground(switch (String.valueOf(wert)) {
-                    case "Wird einsortiert", PlanTabelle.ERSETZT -> new Color(0x1B7F3B);
+                    case "Wird einsortiert", PlanTabelle.ERSETZT, PlanTabelle.UMSORTIERT -> new Color(0x1B7F3B);
                     case "Doublette", PlanTabelle.IN_QUARANTAENE -> new Color(0xB35C00);
                     case "Ausgelassen" -> Color.GRAY;
                     default -> new Color(0xB00020);

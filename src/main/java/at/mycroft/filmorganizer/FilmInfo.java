@@ -13,23 +13,33 @@ import java.util.Locale;
  * @param staffel    Staffel einer Serienfolge ({@code S01} = 1), 0 bei Filmen
  * @param folge      Folge innerhalb der Staffel ({@code E02} = 2), 0 bei Filmen
  * @param fassung    Schnittfassung wie {@code Extended} oder {@code Director's Cut}, leer für die Kinofassung
+ * @param reihe      Filmreihe wie {@code Harry Potter}, in deren Ordner der Film liegt; leer, wenn er zu keiner gehört
  */
-public record FilmInfo(String titel, int jahr, int aufloesung, int staffel, int folge, String fassung) {
+public record FilmInfo(String titel, int jahr, int aufloesung, int staffel, int folge, String fassung, String reihe) {
 
     /** Unterordner im Ziel, in dem die Serien liegen. */
     static final String SERIEN = "Serien";
 
     public FilmInfo(String titel, int jahr, int aufloesung) {
-        this(titel, jahr, aufloesung, 0, 0, "");
+        this(titel, jahr, aufloesung, 0, 0, "", "");
     }
 
     public FilmInfo(String titel, int jahr, int aufloesung, int staffel, int folge) {
-        this(titel, jahr, aufloesung, staffel, folge, "");
+        this(titel, jahr, aufloesung, staffel, folge, "", "");
+    }
+
+    public FilmInfo(String titel, int jahr, int aufloesung, int staffel, int folge, String fassung) {
+        this(titel, jahr, aufloesung, staffel, folge, fassung, "");
     }
 
     /** Dieselbe Angabe mit einer anderen Fassung. */
     public FilmInfo mitFassung(String andereFassung) {
-        return new FilmInfo(titel, jahr, aufloesung, staffel, folge, andereFassung);
+        return new FilmInfo(titel, jahr, aufloesung, staffel, folge, andereFassung, reihe);
+    }
+
+    /** Dieselbe Angabe in einer anderen Filmreihe (leer: in keiner). */
+    public FilmInfo mitReihe(String andereReihe) {
+        return new FilmInfo(titel, jahr, aufloesung, staffel, folge, fassung, andereReihe);
     }
 
     /** Serienfolge statt Film. */
@@ -58,12 +68,16 @@ public record FilmInfo(String titel, int jahr, int aufloesung, int staffel, int 
         return Dateinamen.bereinigen(titel) + " (" + jahr + ")";
     }
 
-    /** {@code Ziel/Titel (Jahr)} bei Filmen, {@code Ziel/Serien/Titel/Staffel 01} bei Serienfolgen. */
+    /**
+     * {@code Ziel/Titel (Jahr)} bei Filmen, {@code Ziel/Reihe/Titel (Jahr)} bei Filmen einer Filmreihe und
+     * {@code Ziel/Serien/Titel/Staffel 01} bei Serienfolgen.
+     */
     public Path zielOrdner(Path ziel) {
-        return istFolge()
-                ? ziel.resolve(SERIEN).resolve(Dateinamen.bereinigen(titel))
-                        .resolve(String.format(Locale.ROOT, "Staffel %02d", staffel))
-                : ziel.resolve(ordnerName());
+        if (istFolge()) {
+            return ziel.resolve(SERIEN).resolve(Dateinamen.bereinigen(titel))
+                    .resolve(String.format(Locale.ROOT, "Staffel %02d", staffel));
+        }
+        return reihe.isEmpty() ? ziel.resolve(ordnerName()) : ziel.resolve(Dateinamen.bereinigen(reihe)).resolve(ordnerName());
     }
 
     /**
