@@ -203,23 +203,25 @@ public final class Scanner {
     static FilmInfo aufnahmeErkennen(Path video, NamensErkennung.Aufnahme aufnahme) {
         ReceiverDaten daten = ReceiverDaten.lesen(video);
         String titel = daten.titel().isEmpty() ? aufnahme.titel() : daten.titel();
+        int aufloesung = daten.aufloesung(aufnahme.sender());
         String folge = daten.folge(titel);
         if (folge != null) {
-            return FilmInfo.sendung(titel, folge);
+            return new FilmInfo(titel, 0, aufloesung, 0, 0, "", "", folge);
         }
         Path ordner = video.getParent();
         if (ordner != null && ordner.getFileName() != null) {
             Optional<FilmInfo> ausOrdner = NamensErkennung.erkennen(ordner.getFileName().toString());
             if (ausOrdner.isPresent()
                     && FilmInfo.normalisieren(ausOrdner.get().titel()).equals(FilmInfo.normalisieren(titel))) {
-                return ausOrdner.get();
+                FilmInfo info = ausOrdner.get();
+                return info.aufloesung() > 0 ? info : new FilmInfo(info.titel(), info.jahr(), aufloesung);
             }
         }
         int jahr = daten.jahr(aufnahme.datum().getYear());
         if (jahr == 0) {
             LOG.fine(() -> "Sat-Aufnahme ohne Erscheinungsjahr: " + video);
         }
-        return new FilmInfo(titel, jahr, 0);
+        return new FilmInfo(titel, jahr, aufloesung);
     }
 
     /** Auflösung und Fassung, die im Ordnernamen fehlen, stehen oft im Dateinamen. */

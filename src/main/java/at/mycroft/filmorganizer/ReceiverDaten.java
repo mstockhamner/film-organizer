@@ -18,13 +18,20 @@ import java.util.regex.Pattern;
  * {@code film.ts.meta} (Text: Sender, Titel, Kurzbeschreibung, …) und {@code film.eit} (DVB-Programmdaten
  * mit Titel, Kurz- und Langbeschreibung). Rein lokal, ändert nichts.
  *
- * @param titel        Titel der Sendung, leer wenn unbekannt
- * @param kurz         erste Zeile der Kurzbeschreibung, bei Serien meist der Folgentitel
- * @param beschreibung alle Beschreibungstexte zusammen (für Land und Jahr)
+ * @param titel    Titel der Sendung, leer wenn unbekannt
+ * @param sender   Sender, z.B. {@code ATV HD}, leer wenn unbekannt
+ * @param kurztext Kurzbeschreibung; ihre erste Zeile ist bei Serien meist der Folgentitel
+ * @param langtext ausführliche Beschreibung mit Inhalt, Regie, Darstellern
+ * @param technik  Bild- und Tonangaben aus dem EIT, z.B. "HD Video", "stereo deutsch"
  */
-public record ReceiverDaten(String titel, String kurz, String beschreibung) {
+public record ReceiverDaten(String titel, String sender, String kurztext, String langtext, String technik) {
 
-    static final ReceiverDaten LEER = new ReceiverDaten("", "", "");
+    static final ReceiverDaten LEER = new ReceiverDaten("", "", "", "", "");
+
+    /** Für Tests und einfache Fälle: Titel, Kurzbeschreibung, ausführliche Beschreibung. */
+    public ReceiverDaten(String titel, String kurztext, String langtext) {
+        this(titel, "", kurztext, langtext, "");
+    }
 
     /** Länder als Kürzel (USA, D, DEU, DNK/FRA …) oder Name, gefolgt vom Produktionsjahr: "USA 2017". */
     private static final Pattern LAND_JAHR = Pattern.compile(
@@ -44,19 +51,21 @@ public record ReceiverDaten(String titel, String kurz, String beschreibung) {
     public static ReceiverDaten lesen(Path video) {
         String name = video.getFileName().toString();
         String titel = "";
-        String kurz = "";
-        StringBuilder beschreibung = new StringBuilder();
+        String sender = "";
+        String kurztext = "";
+        String langtext = "";
+        String technik = "";
 
         byte[] meta = bytes(video.resolveSibling(name + ".meta"));
         if (meta != null) {
             String[] zeilen = text(meta).split("\n", -1);
+            int dienstEnde = zeilen[0].lastIndexOf("::");
+            sender = dienstEnde < 0 ? "" : zeilen[0].substring(dienstEnde + 2).trim();
             if (zeilen.length > 1) {
                 titel = zeilen[1].trim();
             }
             if (zeilen.length > 2) {
-                String text = zeilen[2].replace("\\n", "\n").trim();
-                kurz = ersteZeile(text);
-                beschreibung.append(text).append('\n');
+                kurztext = zeilen[2].replace("\\n", "\n").trim();
             }
         }
 
@@ -66,22 +75,43 @@ public record ReceiverDaten(String titel, String kurz, String beschreibung) {
             if (titel.isEmpty()) {
                 titel = teile[0];
             }
-            if (kurz.isEmpty()) {
-                kurz = ersteZeile(teile[1]);
+            if (kurztext.isEmpty()) {
+                kurztext = teile[1];
             }
-            beschreibung.append(teile[1]).append('\n').append(teile[2]).append('\n');
+            langtext = teile[2];
+            technik = teile[3];
             if (teile[0].isEmpty() && teile[1].isEmpty() && teile[2].isEmpty()) {
                 // Kein gültiges EIT-Format: als Text durchsuchen.
-                beschreibung.append(new String(eit, StandardCharsets.ISO_8859_1));
+                langtext = new String(eit, StandardCharsets.ISO_8859_1);
             }
         }
-        return new ReceiverDaten(titel, kurz, beschreibung.toString());
+        return new ReceiverDaten(titel, sender, kurztext, langtext, technik);
+    }
+
+    /** Erste Zeile der Kurzbeschreibung, bei Serien meist der Folgentitel. */
+    public String kurz() {
+        return ersteZeile(kurztext);
+    }
+
+    /** Alle Beschreibungstexte zusammen. */
+    public String beschreibung() {
+        return kurztext + "\n" + langtext;
+    }
+
+    /**
+     * Auflösung einer Aufnahme: 720 bei HD (laut Bildangabe "HD Video" oder Sendername wie "ATV HD"),
+     * sonst 576 (SD). So verdrängt eine große Aufnahme mit Werbung keine echte 1080p-Fassung.
+     */
+    public int aufloesung(String senderAusDateiname) {
+        boolean hd = technik.matches("(?is).*\\bHD\\b.*") || sender.matches("(?i).*\\bHD\\b.*")
+                || senderAusDateiname.matches("(?i).*\\bHD\\b.*");
+        return hd ? 720 : 576;
     }
 
     /** Produktionsjahr aus der Beschreibung ("Thriller, USA 2017"), höchstens {@code hoechstens}, sonst 0. */
     public int jahr(int hoechstens) {
         for (Pattern muster : List.of(LAND_JAHR, JAHR_ANGABE)) {
-            Matcher m = muster.matcher(beschreibung);
+            Matcher m = muster.matcher(beschreibung());
             while (m.find()) {
                 int jahr = Integer.parseInt(m.group(1));
                 if (jahr <= hoechstens) {
@@ -99,7 +129,7 @@ public record ReceiverDaten(String titel, String kurz, String beschreibung) {
      * Inhaltstext; eine Folge hat dort einen kurzen eigenen Titel oder Angaben wie "Doku-Reihe", "Teil 4".
      */
     public String folge(String filmtitel) {
-        String k = kurz.trim();
+        String k = kurz();
         if (k.isEmpty()) {
             return null;
         }
@@ -141,14 +171,15 @@ public record ReceiverDaten(String titel, String kurz, String beschreibung) {
     /**
      * Liest ein Enigma2-EIT: 12 Byte Kopf (Event-ID, Startzeit, Dauer, Länge der Deskriptoren), dann
      * DVB-Deskriptoren. 0x4D (Kurzbeschreibung) liefert Titel und Kurztext, 0x4E (erweiterte
-     * Beschreibung, auf mehrere Deskriptoren verteilt) den Langtext.
+     * Beschreibung, auf mehrere Deskriptoren verteilt) den Langtext, 0x50 (Komponenten) Bild und Ton.
      *
-     * @return Titel, Kurztext, Langtext (leer, wenn nicht vorhanden)
+     * @return Titel, Kurztext, Langtext, Technik (leer, wenn nicht vorhanden)
      */
     static String[] eitLesen(byte[] b) {
         String titel = "";
         String kurz = "";
         StringBuilder lang = new StringBuilder();
+        StringBuilder technik = new StringBuilder();
         int pos = 12;
         while (pos + 2 <= b.length) {
             int tag = b[pos] & 0xff;
@@ -169,10 +200,13 @@ public record ReceiverDaten(String titel, String kurz, String beschreibung) {
                 if (textPos < start + laenge) {
                     lang.append(dvbText(b, textPos + 1, Math.min(b[textPos] & 0xff, start + laenge - textPos - 1)));
                 }
+            } else if (tag == 0x50 && laenge > 6) {
+                // Komponente (Bild/Ton): Typ, Tag, Sprache, dann Text wie "HD Video".
+                technik.append(dvbText(b, start + 6, laenge - 6)).append('\n');
             }
             pos = start + laenge;
         }
-        return new String[] {titel.trim(), kurz.trim(), lang.toString().trim()};
+        return new String[] {titel.trim(), kurz.trim(), lang.toString().trim(), technik.toString().trim()};
     }
 
     /**

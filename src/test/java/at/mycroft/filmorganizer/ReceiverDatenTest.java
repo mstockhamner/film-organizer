@@ -132,6 +132,33 @@ class ReceiverDatenTest {
     }
 
     @Test
+    void aufloesungNachSenderUndBildangabe() {
+        assertEquals(720, new ReceiverDaten("", "", "", "", "HD Video\nstereo deutsch").aufloesung("VOX Austria"));
+        assertEquals(720, new ReceiverDaten("", "ATV HD", "", "", "").aufloesung(""));
+        assertEquals(720, ReceiverDaten.LEER.aufloesung("ORF1 HD"));
+        assertEquals(576, new ReceiverDaten("", "zdf_neo SD", "", "", "stereo deutsch").aufloesung("zdf_neo SD"));
+        assertEquals(576, ReceiverDaten.LEER.aufloesung("RTLZWEI Austria"));
+    }
+
+    @Test
+    void aufnahmeVerdraengtKeineEchte1080pFassung() throws IOException {
+        Path ziel = quelle.resolve("Sammlung").toAbsolutePath().normalize();
+        Path blu = quelle.resolve("La.La.Land.2016.German.1080p.BluRay/lll.mkv");
+        Files.createDirectories(blu.getParent());
+        Files.writeString(blu, "1080p");
+        Ausfuehrung.ausfuehren(Main.planErstellen(quelle, ziel), ziel,
+                new java.io.PrintStream(java.io.OutputStream.nullOutputStream()));
+        // Die Aufnahme ist viel größer (Werbung), aber nur HD = 720p.
+        Path aufnahme = aufnahme("20200914 0048 - sixx Austria HD - La La Land", "La La Land",
+                "La La Land\\nMusical, USA 2016\\nAltersfreigabe: Ohne Altersbeschränkung");
+        Files.writeString(aufnahme, "x".repeat(1000));
+        Aktion aktion = Main.planErstellen(quelle, ziel).stream()
+                .filter(a -> a.film().video().equals(aufnahme)).findFirst().orElseThrow();
+        assertEquals(720, aktion.film().info().aufloesung());
+        assertTrue(aktion.inQuarantaene(), aktion.hinweis());
+    }
+
+    @Test
     void titelAusDerMetaDateiStattAusDemDateinamen() throws IOException {
         Path video = aufnahme("20260509 2332 - RTLZWEI Austria - Die Nackte Kanone 33 13", "Die Nackte Kanone 33 1/3",
                 "Chaos-Cop Frank Drebin hat seinen Job gegen das unbeschwerte Leben eines Hausmannes eingetauscht. Doch");
