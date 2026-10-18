@@ -23,6 +23,7 @@ Stand: 18.10.2026 · Projekt: `E:\claude\work\film-organizer` (at.mycroft.filmor
 
 ### 3.1 Scannen
 - Einen oder mehrere Quellordner rekursiv durchsuchen.
+- Die Sammlung liegt auf einem Synology-NAS (ergänzt 18.10.2026). Beim Durchsuchen werden der Papierkorb `#recycle` und die Metadaten-Ordner `@eaDir` (Vorschaubilder der Synology) übersprungen, egal in welcher Tiefe und Schreibweise. Dateien darin zählen weder als Film noch als Doublette noch als Cover.
 - Videodateien erkennen (`.mkv`, `.mp4`, `.avi`, `.m4v`, `.ts`), Begleitdateien zuordnen (Cover, `.nfo`, Untertitel `.srt/.sub/.idx`).
 - Ergebnis wird in einem lokalen Katalog gespeichert (Datei im Projekt- oder Benutzerordner, z.B. SQLite oder JSON).
 - **Wachsende Sammlung:** Das Programm wird wiederholt eingesetzt. Bereits einsortierte Filme stehen im Katalog und werden nicht erneut verarbeitet. Neue Filme in den Quellordnern werden erkannt und vor dem Einsortieren gegen den bestehenden Zielordner auf Doubletten geprüft. Folgescans lesen nur neue oder geänderte Dateien.

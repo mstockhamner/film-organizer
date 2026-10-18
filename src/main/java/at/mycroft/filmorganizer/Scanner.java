@@ -12,6 +12,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 import java.util.logging.Logger;
 import java.util.stream.Stream;
 
@@ -24,6 +25,12 @@ public final class Scanner {
     private static final long SAMPLE_GRENZE = 300L * 1024 * 1024;
 
     private static final Logger LOG = Log.fuer(Scanner.class);
+
+    /**
+     * Ordner, die nicht zur Sammlung gehören: der Papierkorb einer Synology-Freigabe ({@code #recycle})
+     * und die Vorschaubilder und Metadaten, die die Synology zu jeder Datei anlegt ({@code @eaDir}).
+     */
+    private static final Set<String> SYSTEMORDNER = Set.of("#recycle", "@eadir");
 
     private Scanner() {
     }
@@ -42,6 +49,10 @@ public final class Scanner {
             public FileVisitResult preVisitDirectory(Path ordner, BasicFileAttributes attribute) {
                 if (zielordner.istZiel(ordner)) {
                     LOG.info(() -> "Zielordner beim Durchsuchen übersprungen: " + ordner);
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
+                if (!ordner.equals(quelleAbs) && istSystemordner(ordner)) {
+                    LOG.info(() -> "Systemordner beim Durchsuchen übersprungen: " + ordner);
                     return FileVisitResult.SKIP_SUBTREE;
                 }
                 return FileVisitResult.CONTINUE;
@@ -210,6 +221,10 @@ public final class Scanner {
         } catch (UncheckedIOException e) {
             throw e.getCause();
         }
+    }
+
+    static boolean istSystemordner(Path ordner) {
+        return SYSTEMORDNER.contains(name(ordner).toLowerCase(Locale.ROOT));
     }
 
     private static String name(Path datei) {
