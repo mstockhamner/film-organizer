@@ -1,13 +1,16 @@
 package at.mycroft.filmorganizer;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
 class MainTest {
 
     @Test
-    void begruessungNenntDasProgramm() {
-        assertEquals("Filmorganizer", Main.begruessung());
+    void hilfeNenntAlleBefehle() {
+        String hilfe = Main.hilfe();
+        assertTrue(hilfe.contains("vorschau"));
+        assertTrue(hilfe.contains("ausfuehren"));
+        assertTrue(hilfe.contains("rueckgaengig"));
     }
 }
