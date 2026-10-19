@@ -81,6 +81,7 @@ Stufenweise, damit nicht jede Datei komplett gelesen werden muss:
 
 ### 3.6 Bedienung
 - **Oberfläche** (Java Swing, ohne zusätzliche Bibliotheken): Quelle und Ziel wählen, „Titel einlesen“ liest alle Filme ein und zeigt eine Maske mit Vorschlag für Titel, Jahr und neuen Ort. Titel und Jahr lassen sich dort per Doppelklick ändern (auch für nicht erkannte Filme), einzelne Filme lassen sich abwählen. Jede Änderung aktualisiert Zielordner und Doublettenprüfung sofort. Danach nach Bestätigung einsortieren oder den letzten Lauf rückgängig machen. Start per Doppelklick auf `Filmorganizer.bat` oder `java -jar` ohne Argumente. Die zuletzt gewählten Ordner merkt sich das Programm lokal.
+- **Arbeitsstand** (ergänzt 19.10.2026): Jede Änderung in der Liste (Titel, Jahr, Abwahl, Entscheidung, Filmreihe) wird sofort automatisch gespeichert, lokal in `%USERPROFILE%\.filmorganizer\arbeitsstaende\` (eine Datei je Quelle und Ziel, neben dem Logfile; Quelle und Ziel bleiben unberührt). Beim nächsten „Titel einlesen“ mit derselben Quelle und demselben Ziel ist alles wiederhergestellt, die Liste lässt sich also über mehrere Sitzungen vervollständigen. Änderungen zu gerade nicht erreichbaren Filmen (z.B. NAS aus) bleiben erhalten. Nach dem Einsortieren fallen die erledigten Filme heraus, Unvollständiges bleibt. „Änderungen verwerfen …“ setzt die Liste nach Rückfrage auf die Vorschläge zurück.
 - **Kommandozeile** für dieselben Funktionen: `vorschau`, `ausfuehren`, `rueckgaengig`.
 
 ## 4. Nicht im Umfang (erste Version)

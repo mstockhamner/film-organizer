@@ -68,6 +68,7 @@ public final class Fenster extends JFrame {
     private final JButton rueckgaengig = new JButton("Letzten Lauf rückgängig …");
     private final JButton reiheZuweisen = new JButton("Filmreihe zuweisen …");
     private final JButton reihenVerwalten = new JButton("Filmreihen verwalten …");
+    private final JButton verwerfen = new JButton("Änderungen verwerfen …");
     private final JTable ansicht = new JTable();
     private final JLabel status = new JLabel("Quelle und Ziel wählen, dann „Titel einlesen“.");
     private final JProgressBar fortschritt = new JProgressBar();
@@ -87,9 +88,13 @@ public final class Fenster extends JFrame {
         reiheZuweisen.addActionListener(e -> reiheZuweisen());
         reihenVerwalten.addActionListener(e -> new ReihenDialog(this, tabelle.vorschlaege(), tabelle::aktualisieren)
                 .setVisible(true));
+        verwerfen.addActionListener(e -> aenderungenVerwerfen());
+        verwerfen.setToolTipText("Änderungen in der Liste werden automatisch gespeichert und beim nächsten "
+                + "Einlesen wiederhergestellt. Hier lassen sie sich verwerfen.");
         einsortieren.setEnabled(false);
         reiheZuweisen.setEnabled(false);
         reihenVerwalten.setEnabled(false);
+        verwerfen.setEnabled(false);
         ansicht.getSelectionModel().addListSelectionListener(e -> reiheZuweisen.setEnabled(ansicht.getSelectedRowCount() > 0));
         tabelle.beiAenderung(this::nachAenderung);
         Log.beiUnerwartetemFehler(fehler -> SwingUtilities.invokeLater(() -> fehlerAnzeigen("Unerwarteter Fehler", fehler)));
@@ -125,6 +130,8 @@ public final class Fenster extends JFrame {
         knoepfe.add(Box.createHorizontalStrut(8));
         knoepfe.add(reihenVerwalten);
         knoepfe.add(Box.createHorizontalStrut(24));
+        knoepfe.add(verwerfen);
+        knoepfe.add(Box.createHorizontalStrut(8));
         knoepfe.add(rueckgaengig);
         GridBagConstraints c = new GridBagConstraints();
         c.gridx = 1;
@@ -230,23 +237,43 @@ public final class Fenster extends JFrame {
         Path z = Path.of(ziel.getText().trim());
         EINSTELLUNGEN.put("quelle", q.toString());
         EINSTELLUNGEN.put("ziel", z.toString());
-        imHintergrund("Lese alle Titel in " + q + " ein …", () -> Vorschlaege.einlesen(q, z), vorschlaege -> {
-            try {
-                tabelle.anzeigen(vorschlaege, q);
-            } catch (IOException e) {
-                fehlerAnzeigen("Titel einlesen", e);
-                return;
-            }
-            nachAenderung();
-        });
+        imHintergrund("Lese alle Titel in " + q + " ein …",
+                () -> Vorschlaege.einlesen(q, z, Vorschlaege.standardSpeicherordner()), vorschlaege -> {
+                    try {
+                        tabelle.anzeigen(vorschlaege, q);
+                    } catch (IOException e) {
+                        fehlerAnzeigen("Titel einlesen", e);
+                        return;
+                    }
+                    nachAenderung();
+                    int gespeichert = vorschlaege.anzahlAenderungen();
+                    if (gespeichert > 0) {
+                        status.setText("Gespeicherter Arbeitsstand geladen: Änderungen zu " + gespeichert
+                                + " Filmen wiederhergestellt. " + status.getText());
+                    }
+                });
     }
 
     private void nachAenderung() {
         List<Aktion> plan = tabelle.plan();
         reihenVerwalten.setEnabled(tabelle.vorschlaege() != null);
+        verwerfen.setEnabled(tabelle.vorschlaege() != null && tabelle.vorschlaege().anzahlAenderungen() > 0);
         einsortieren.setEnabled(anzahl(plan, Art.EINSORTIEREN) + anzahl(plan, Art.ERSETZEN)
                 + anzahl(plan, Art.UMSORTIEREN) + quarantaene(plan) > 0);
         status.setText(zusammenfassung(plan));
+    }
+
+    /** Verwirft nach Rückfrage alle Änderungen in der Liste samt gespeichertem Arbeitsstand. */
+    private void aenderungenVerwerfen() {
+        Vorschlaege v = tabelle.vorschlaege();
+        if (v == null || JOptionPane.showConfirmDialog(this, "Alle Änderungen in der Liste verwerfen?\n"
+                + "Titel, Jahre, Abwahlen, Entscheidungen und Filmreihen von " + v.anzahlAenderungen()
+                + " Filmen gehen verloren, die Liste zeigt wieder die Vorschläge.", "Änderungen verwerfen",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE) != JOptionPane.OK_OPTION) {
+            return;
+        }
+        v.verwerfen();
+        tabelle.aktualisieren();
     }
 
     /** Fragt nach einer Filmreihe und setzt sie für alle markierten Filme. */
@@ -318,6 +345,7 @@ public final class Fenster extends JFrame {
             }
             int erledigt = Ausfuehrung.ausfuehren(plan, tabelle.quelle(), z, stilleAusgabe());
             tabelle.zuordnungenMerken(plan);
+            tabelle.vorschlaege().nachEinsortieren(plan);
             return erledigt;
         }, erledigt -> {
             JOptionPane.showMessageDialog(this, erledigt + " Filme einsortiert oder ersetzt, " + quarantaene
@@ -351,6 +379,7 @@ public final class Fenster extends JFrame {
                     tabelle.leeren();
                     einsortieren.setEnabled(false);
                     reihenVerwalten.setEnabled(false);
+                    verwerfen.setEnabled(false);
                     status.setText(text + " Für neue Vorschläge „Titel einlesen“ klicken.");
                 });
     }
@@ -395,7 +424,8 @@ public final class Fenster extends JFrame {
                 + plan.stream().filter(Aktion::offen).count() + " andere Fassungen zu entscheiden, "
                 + anzahl(plan, Art.UNERKANNT) + " nicht erkannt, "
                 + anzahl(plan, Art.KONFLIKT) + " Konflikte, " + anzahl(plan, Art.AUSGELASSEN) + " ausgelassen. "
-                + "Titel und Jahr lassen sich per Doppelklick ändern. Es wurde noch nichts verändert.";
+                + "Titel und Jahr lassen sich per Doppelklick ändern; Änderungen werden automatisch gespeichert. "
+                + "Es wurde noch nichts verschoben.";
     }
 
     private static long anzahl(List<Aktion> plan, Art art) {
