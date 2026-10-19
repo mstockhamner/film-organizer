@@ -13,6 +13,8 @@ import java.awt.FlowLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
+import java.awt.event.ActionEvent;
+import java.awt.event.KeyEvent;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -28,6 +30,7 @@ import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.prefs.Preferences;
+import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.DefaultCellEditor;
@@ -46,6 +49,7 @@ import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
+import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.UIManager;
@@ -170,9 +174,29 @@ public final class Fenster extends JFrame {
         zuweisen.addActionListener(e -> reiheZuweisen());
         JMenuItem entfernen = new JMenuItem("Aus Filmreihe entfernen");
         entfernen.addActionListener(e -> reiheSetzen(""));
+        JMenuItem uebernehmen = new JMenuItem("Markierte übernehmen");
+        uebernehmen.addActionListener(e -> mitAuswahl(z -> tabelle.uebernehmenSetzen(z, true)));
+        JMenuItem nichtUebernehmen = new JMenuItem("Markierte nicht übernehmen");
+        nichtUebernehmen.addActionListener(e -> mitAuswahl(z -> tabelle.uebernehmenSetzen(z, false)));
+        menue.add(uebernehmen);
+        menue.add(nichtUebernehmen);
+        menue.addSeparator();
         menue.add(zuweisen);
         menue.add(entfernen);
         ansicht.setComponentPopupMenu(menue);
+        // Leertaste schaltet "Übernehmen" für alle markierten Zeilen um, nicht nur für die aktuelle.
+        // Gedrückt: nichts (sonst ändert JTable die Markierung); getippt: umschalten (sonst würde ein
+        // Leerzeichen in die Titelzelle geschrieben).
+        ansicht.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
+                .put(KeyStroke.getKeyStroke(KeyEvent.VK_SPACE, 0), "none");
+        ansicht.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
+                .put(KeyStroke.getKeyStroke(' '), "uebernehmenUmschalten");
+        ansicht.getActionMap().put("uebernehmenUmschalten", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                mitAuswahl(tabelle::uebernehmenUmschalten);
+            }
+        });
         ansicht.setFillsViewportHeight(true);
         ansicht.setRowHeight(ansicht.getRowHeight() + 4);
         ansicht.putClientProperty("terminateEditOnFocusLost", Boolean.TRUE);
@@ -306,6 +330,26 @@ public final class Fenster extends JFrame {
         if (uebergangen > 0) {
             JOptionPane.showMessageDialog(this, uebergangen + " markierte Zeilen sind Serienfolgen oder Filme ohne "
                     + "Titel und Jahr und wurden übergangen.", "Filmreihe", JOptionPane.INFORMATION_MESSAGE);
+        }
+    }
+
+    /** Führt eine Änderung für die markierten Zeilen aus und behält die Markierung danach bei. */
+    private void mitAuswahl(Consumer<int[]> aenderung) {
+        int[] zeilen = markierteZeilen();
+        if (zeilen.length == 0) {
+            fehler("Bitte zuerst einen oder mehrere Filme in der Tabelle markieren (Strg- oder Umschalt-Klick).");
+            return;
+        }
+        if (ansicht.isEditing()) {
+            ansicht.getCellEditor().stopCellEditing();
+        }
+        aenderung.accept(zeilen);
+        ansicht.clearSelection();
+        for (int zeile : zeilen) {
+            int sicht = ansicht.convertRowIndexToView(zeile);
+            if (sicht >= 0) {
+                ansicht.addRowSelectionInterval(sicht, sicht);
+            }
         }
     }
 

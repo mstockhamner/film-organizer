@@ -134,6 +134,35 @@ class PlanTabelleTest {
     }
 
     @Test
+    void mehrereZeilenAufEinmalUebernehmenOderNicht() throws IOException {
+        Path ziel = quelle.resolve("Sammlung");
+        datei("Batman.Begins.2005.German.1080p/bb.mkv");
+        datei("Der.Pate.1972.German.1080p/pate.mkv");
+        datei("The.Dark.Knight.2008.German.1080p/tdk.mkv");
+        PlanTabelle tabelle = new PlanTabelle();
+        int[] aenderungen = {0};
+        tabelle.beiAenderung(() -> aenderungen[0]++);
+        tabelle.anzeigen(Vorschlaege.einlesen(quelle, ziel), quelle);
+
+        tabelle.uebernehmenSetzen(new int[] {0, 2}, false);
+        assertEquals(List.of(false, true, false), uebernehmen(tabelle));
+        assertEquals("Ausgelassen", tabelle.getValueAt(0, PlanTabelle.STATUS));
+        assertEquals(1, aenderungen[0], "einmal neu geplant, nicht je Zeile");
+
+        // Leertaste: nicht alle markierten übernommen, also werden alle übernommen.
+        tabelle.uebernehmenUmschalten(new int[] {0, 1});
+        assertEquals(List.of(true, true, false), uebernehmen(tabelle));
+        // Jetzt sind alle markierten übernommen, also werden alle abgewählt.
+        tabelle.uebernehmenUmschalten(new int[] {0, 1});
+        assertEquals(List.of(false, false, false), uebernehmen(tabelle));
+    }
+
+    private static List<Object> uebernehmen(PlanTabelle tabelle) {
+        return List.of(tabelle.getValueAt(0, PlanTabelle.UEBERNEHMEN), tabelle.getValueAt(1, PlanTabelle.UEBERNEHMEN),
+                tabelle.getValueAt(2, PlanTabelle.UEBERNEHMEN));
+    }
+
+    @Test
     void zusammenfassungZaehltNachArt() {
         Film f = new Film(quelle.resolve("a.mkv"), 1, null, List.of());
         assertEquals("Keine Filme gefunden.", Fenster.zusammenfassung(List.of()));

@@ -6,6 +6,7 @@ import at.mycroft.filmorganizer.Vorschlaege;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.TreeSet;
 import javax.swing.table.AbstractTableModel;
@@ -202,6 +203,31 @@ final class PlanTabelle extends AbstractTableModel {
         if (vorschlaege != null) {
             vorschlaege.zuordnungenMerken(ausgefuehrt);
         }
+    }
+
+    /** Hakt "Übernehmen" für mehrere Zeilen auf einmal an oder ab. */
+    void uebernehmenSetzen(int[] zeilen, boolean uebernehmen) {
+        if (zeilen.length == 0) {
+            return;
+        }
+        List<Path> videos = new ArrayList<>();
+        for (int zeile : zeilen) {
+            videos.add(plan.get(zeile).film().video());
+        }
+        vorschlaege.auslassen(videos, !uebernehmen);
+        aktualisieren();
+    }
+
+    /**
+     * Leertaste über mehreren Zeilen: Sind alle markierten übernommen, werden alle abgewählt, sonst
+     * werden alle übernommen.
+     */
+    void uebernehmenUmschalten(int[] zeilen) {
+        boolean alleUebernommen = true;
+        for (int zeile : zeilen) {
+            alleUebernommen &= !vorschlaege.istAusgelassen(plan.get(zeile).film().video());
+        }
+        uebernehmenSetzen(zeilen, !alleUebernommen);
     }
 
     /** Alle Filmreihen aus Vorschau und Sammlung, alphabetisch, für die Auswahl beim Zuweisen. */

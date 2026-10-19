@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -145,6 +146,16 @@ public final class Vorschlaege {
             ausgelassen.add(video);
         } else {
             ausgelassen.remove(video);
+        }
+        merken();
+    }
+
+    /** Wählt mehrere Filme auf einmal ab oder wieder an (ein Speichervorgang). */
+    public void auslassen(Collection<Path> videos, boolean auslassen) {
+        if (auslassen) {
+            ausgelassen.addAll(videos);
+        } else {
+            ausgelassen.removeAll(videos);
         }
         merken();
     }
