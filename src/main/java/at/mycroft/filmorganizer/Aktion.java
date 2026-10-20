@@ -52,8 +52,8 @@ public record Aktion(Art art, Film film, List<Verschiebung> verschiebungen, Stri
         ERSETZEN,
         /** Film aus der Sammlung, der in den Ordner seiner Filmreihe verschoben wird. */
         UMSORTIEREN,
-        /** Film der Sammlung ohne Jahr, dessen Jahr jetzt bekannt ist: Ordner und Dateien bekommen "(Jahr)". */
-        JAHR_ERGAENZEN,
+        /** Film der Sammlung, dessen Ordner und Dateien einen neuen Namen bekommen (z.B. mit Jahr oder Reihenname). */
+        UMBENENNEN,
         /**
          * Andere Fassung eines vorhandenen Films (z.B. Extended neben der Kinofassung). Bleibt liegen,
          * bis in der Vorschau entschieden ist, ob beide behalten werden.

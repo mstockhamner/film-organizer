@@ -143,7 +143,28 @@ public record FilmInfo(String titel, int jahr, int aufloesung, int staffel, int 
         }
         return istFolge()
                 ? normalisieren(titel) + "|" + kennung()
-                : normalisieren(titel) + "|" + jahr;
+                : normalisieren(basisTitel()) + "|" + jahr;
+    }
+
+    /**
+     * Titel ohne vorangestellten Reihennamen: "Der Film" für "Star Trek - Der Film" in der Reihe Star Trek. So
+     * sind beide Schreibweisen bei der Doublettenprüfung derselbe Film.
+     */
+    public String basisTitel() {
+        if (!reihe.isEmpty()) {
+            String vorne = Dateinamen.bereinigen(reihe) + " - ";
+            String bereinigt = Dateinamen.bereinigen(titel);
+            if (bereinigt.regionMatches(true, 0, vorne, 0, vorne.length()) && bereinigt.length() > vorne.length()) {
+                return bereinigt.substring(vorne.length());
+            }
+        }
+        return titel;
+    }
+
+    /** Derselbe Film mit dem Reihennamen vor dem Titel ("Star Trek - Der Film") oder ohne ("Der Film"). */
+    public FilmInfo mitReihennameImTitel(boolean mitReihenname) {
+        String basis = basisTitel();
+        return mitTitelUndJahr(mitReihenname && !reihe.isEmpty() ? reihe + " - " + basis : basis, jahr);
     }
 
     /** Schlüssel für Film und Fassung: Extended und Kinofassung desselben Films sind verschieden. */

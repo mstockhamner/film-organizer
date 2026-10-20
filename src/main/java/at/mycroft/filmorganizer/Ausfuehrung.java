@@ -99,7 +99,7 @@ public final class Ausfuehrung {
                 StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
             for (Aktion aktion : plan) {
                 if (aktion.art() != Art.EINSORTIEREN && aktion.art() != Art.ERSETZEN && aktion.art() != Art.UMSORTIEREN
-                        && aktion.art() != Art.JAHR_ERGAENZEN && !aktion.inQuarantaene()) {
+                        && aktion.art() != Art.UMBENENNEN && !aktion.inQuarantaene()) {
                     continue;
                 }
                 for (Verschiebung v : aktion.verschiebungen()) {
@@ -140,7 +140,7 @@ public final class Ausfuehrung {
                     ausgabe.println("in Quarantäne: " + ziel.relativize(video));
                     continue;
                 }
-                if (aktion.art() == Art.JAHR_ERGAENZEN || aktion.art() == Art.ERSETZEN) {
+                if (aktion.art() == Art.UMBENENNEN || aktion.art() == Art.ERSETZEN) {
                     // Einträge der verschobenen Dateien aus der Sammlung fallen weg (z.B. der alte ohne Jahr),
                     // ihr leer gewordener Ordner auch.
                     Path zielAbs = ziel.toAbsolutePath().normalize();
@@ -152,11 +152,11 @@ public final class Ausfuehrung {
                         }
                     }
                 }
-                if (aktion.art() == Art.JAHR_ERGAENZEN) {
+                if (aktion.art() == Art.UMBENENNEN) {
                     katalog.hinzufuegen(new Katalog.Eintrag(aktion.film().info(), ziel.relativize(video).toString(),
                             aktion.film().groesse()));
                     katalog.speichern();
-                    ausgabe.println("Jahr ergänzt: " + ziel.relativize(video));
+                    ausgabe.println("umbenannt: " + ziel.relativize(video));
                     continue;
                 }
                 // Beim Ersetzen fällt der alte Eintrag weg, weil Film und Fassung gleich sind.

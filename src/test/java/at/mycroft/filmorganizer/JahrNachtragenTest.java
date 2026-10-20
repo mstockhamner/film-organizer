@@ -43,7 +43,7 @@ class JahrNachtragenTest {
         Path neu = datei("Der.Pate.1972.German/pate.mkv", "klein");
         List<Aktion> plan = Main.planErstellen(quelle, ziel);
         assertTrue(aktion(plan, neu).inQuarantaene(), "als derselbe Film erkannt, kleiner");
-        Aktion jahr = plan.stream().filter(a -> a.art() == Art.JAHR_ERGAENZEN).findFirst().orElseThrow();
+        Aktion jahr = plan.stream().filter(a -> a.art() == Art.UMBENENNEN).findFirst().orElseThrow();
         assertEquals("Jahr ergänzen: Der Pate wird Der Pate (1972)", jahr.hinweis());
 
         Ausfuehrung.ausfuehren(plan, quelle, ziel, still);
@@ -66,7 +66,7 @@ class JahrNachtragenTest {
         List<Aktion> plan = Main.planErstellen(quelle, ziel);
         Aktion ersetzen = aktion(plan, neu);
         assertEquals(Art.ERSETZEN, ersetzen.art());
-        assertTrue(plan.stream().noneMatch(a -> a.art() == Art.JAHR_ERGAENZEN));
+        assertTrue(plan.stream().noneMatch(a -> a.art() == Art.UMBENENNEN));
 
         Ausfuehrung.ausfuehren(plan, quelle, ziel, still);
         assertTrue(Files.exists(ziel.resolve("Der Pate (1972)/Der Pate (1972).mkv")));

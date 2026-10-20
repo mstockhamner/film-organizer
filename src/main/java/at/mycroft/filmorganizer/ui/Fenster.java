@@ -288,7 +288,7 @@ public final class Fenster extends JFrame {
         reihenVerwalten.setEnabled(tabelle.vorschlaege() != null);
         verwerfen.setEnabled(tabelle.vorschlaege() != null && tabelle.vorschlaege().anzahlAenderungen() > 0);
         einsortieren.setEnabled(anzahl(plan, Art.EINSORTIEREN) + anzahl(plan, Art.ERSETZEN)
-                + anzahl(plan, Art.UMSORTIEREN) + anzahl(plan, Art.JAHR_ERGAENZEN) + quarantaene(plan) > 0);
+                + anzahl(plan, Art.UMSORTIEREN) + anzahl(plan, Art.UMBENENNEN) + quarantaene(plan) > 0);
         status.setText(zusammenfassung(plan));
     }
 
@@ -367,7 +367,7 @@ public final class Fenster extends JFrame {
         Path z = tabelle.ziel();
         long anzahl = anzahl(plan, Art.EINSORTIEREN);
         long ersetzt = anzahl(plan, Art.ERSETZEN);
-        long umsortiert = anzahl(plan, Art.UMSORTIEREN) + anzahl(plan, Art.JAHR_ERGAENZEN);
+        long umsortiert = anzahl(plan, Art.UMSORTIEREN) + anzahl(plan, Art.UMBENENNEN);
         long quarantaene = quarantaene(plan);
         long offen = plan.stream().filter(Aktion::offen).count();
         int antwort = JOptionPane.showConfirmDialog(this,
@@ -469,7 +469,7 @@ public final class Fenster extends JFrame {
         return anzahl(plan, Art.EINSORTIEREN) + " werden einsortiert, "
                 + anzahl(plan, Art.DOUBLETTE) + " Doubletten (davon " + quarantaene(plan) + " in Quarantäne), "
                 + anzahl(plan, Art.ERSETZEN) + " ersetzen vorhandene, "
-                + (anzahl(plan, Art.UMSORTIEREN) + anzahl(plan, Art.JAHR_ERGAENZEN)) + " Filme der Sammlung werden umsortiert oder umbenannt, "
+                + (anzahl(plan, Art.UMSORTIEREN) + anzahl(plan, Art.UMBENENNEN)) + " Filme der Sammlung werden umsortiert oder umbenannt, "
                 + plan.stream().filter(Aktion::offen).count() + " andere Fassungen zu entscheiden, "
                 + anzahl(plan, Art.UNERKANNT) + " nicht erkannt, "
                 + anzahl(plan, Art.KONFLIKT) + " Konflikte, " + anzahl(plan, Art.AUSGELASSEN) + " ausgelassen. "
@@ -508,7 +508,7 @@ public final class Fenster extends JFrame {
             Component c = super.getTableCellRendererComponent(table, wert, ausgewaehlt, fokus, zeile, spalte);
             if (!ausgewaehlt) {
                 c.setForeground(switch (String.valueOf(wert)) {
-                    case "Wird einsortiert", PlanTabelle.ERSETZT, PlanTabelle.UMSORTIERT, PlanTabelle.JAHR_ERGAENZT -> new Color(0x1B7F3B);
+                    case "Wird einsortiert", PlanTabelle.ERSETZT, PlanTabelle.UMSORTIERT, PlanTabelle.UMBENANNT -> new Color(0x1B7F3B);
                     case "Doublette", PlanTabelle.IN_QUARANTAENE -> new Color(0xB35C00);
                     case "Ausgelassen" -> Color.GRAY;
                     default -> new Color(0xB00020);

@@ -30,7 +30,7 @@ final class PlanTabelle extends AbstractTableModel {
     static final String IN_QUARANTAENE = "Doublette → Quarantäne";
     static final String ERSETZT = "Ersetzt vorhandene";
     static final String UMSORTIERT = "Wird umsortiert";
-    static final String JAHR_ERGAENZT = "Jahr wird ergänzt";
+    static final String UMBENANNT = "Wird umbenannt";
     /** Vorläufiger Titel aus dem Dateinamen, der noch korrekt benannt werden muss. */
     static final String TITEL_PRUEFEN = "Titel prüfen";
 
@@ -118,7 +118,7 @@ final class PlanTabelle extends AbstractTableModel {
             case ENTSCHEIDUNG -> aktion.auswahl().isEmpty() ? "" : text(aktion, aktion.entscheidung());
             case REIHE -> aktion.film().erkannt() ? aktion.film().info().reihe() : "";
             default -> aktion.art() == Aktion.Art.EINSORTIEREN || aktion.art() == Aktion.Art.UMSORTIEREN
-                    || aktion.art() == Aktion.Art.JAHR_ERGAENZEN
+                    || aktion.art() == Aktion.Art.UMBENENNEN
                     ? relativ(vorschlaege.ziel(), neuerOrt(aktion))
                     : aktion.art() == Aktion.Art.ERSETZEN || aktion.inQuarantaene()
                     ? relativ(vorschlaege.ziel(), neuerOrt(aktion)) + " (" + aktion.hinweis() + ")"
@@ -287,7 +287,7 @@ final class PlanTabelle extends AbstractTableModel {
             case DOUBLETTE -> "Doublette";
             case ERSETZEN -> ERSETZT;
             case UMSORTIEREN -> UMSORTIERT;
-            case JAHR_ERGAENZEN -> JAHR_ERGAENZT;
+            case UMBENENNEN -> UMBENANNT;
             case FASSUNG -> "Andere Fassung";
             case UNERKANNT -> "Nicht erkannt";
             case KONFLIKT -> "Konflikt";

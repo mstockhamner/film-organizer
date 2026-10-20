@@ -140,8 +140,13 @@ public final class Planer {
         // 3. Abgleich mit der bestehenden Sammlung und Zielpfade festlegen. Die bessere Fassung zuerst,
         //    damit sie einsortiert wird und weitere Fassungen desselben Films nachgefragt werden.
         eindeutig.sort(BESSER_ZUERST);
+        grosseReihen = grosseReihenBestimmen(filme);
         for (Film film : eindeutig) {
-            Aktion aktion = gegenSammlung(mitReihe(film, reiheFuer(film.video(), film.info())));
+            Film inReihe = mitReihe(film, reiheFuer(film.video(), film.info()));
+            if (inReihe.info().nummer() > 0) {
+                inReihe = inReihe.mitInfo(inReihe.info().mitReihennameImTitel(mitReihenname(inReihe.info())));
+            }
+            Aktion aktion = gegenSammlung(inReihe);
             if (film.vorlaeufig() && aktion.auswahl().isEmpty()) {
                 aktion = aktion.mit(Entscheidung.TITEL_UEBERNEHMEN, Entscheidung.BENENNEN, BENENNEN_AUSWAHL);
             }
@@ -151,7 +156,8 @@ public final class Planer {
             }
             aktionen.add(aktion);
         }
-        // Filme der Sammlung ohne Jahr, deren Jahr eine neue Fassung verrät.
+        // Filme der Sammlung umbenennen: Jahr ergänzen (verrät eine neue Fassung) und Reihenname im Titel.
+        reihennamenAnpassen(aktionen);
         aktionen.addAll(jahrErgaenzen);
 
         // 4. Filme aus der Sammlung, die jetzt zu einer Filmreihe gehören, in deren Ordner umsortieren.
@@ -317,6 +323,15 @@ public final class Planer {
         if (jahr == 0 || vorhanden.info().jahr() != 0 || vorhanden.info().istFolge()) {
             return;
         }
+        umbenennenVorschlagen(vorhanden, vorhanden.info().mitTitelUndJahr(vorhanden.info().titel(), jahr), "Jahr ergänzen");
+    }
+
+    /**
+     * Schlägt vor, Ordner und Dateien eines Films der Sammlung nach {@code neu} umzubenennen (Dateien mit dem
+     * alten Namen bekommen den neuen, andere wie {@code poster.jpg} ziehen mit). Nur wenn der Film allein in
+     * seinem Ordner liegt, der Ordner nach dem Schema heißt und der neue frei ist.
+     */
+    private void umbenennenVorschlagen(Katalog.Eintrag vorhanden, FilmInfo neu, String grund) throws IOException {
         Path alt = katalog.eintraege().contains(vorhanden) ? alteDatei(vorhanden) : null;
         if (alt == null) {
             return;
@@ -332,27 +347,83 @@ public final class Planer {
         if (videos != 1) {
             return;
         }
-        FilmInfo mitJahr = vorhanden.info().mitTitelUndJahr(vorhanden.info().titel(), jahr);
-        Film film = new Film(alt, Files.size(alt), mitJahr, List.of());
-        Path neuerOrdner = mitJahr.zielOrdner(ziel);
+        Film film = new Film(alt, Files.size(alt), neu, List.of());
+        Path neuerOrdner = neu.zielOrdner(ziel);
         if (Files.exists(neuerOrdner)) {
-            jahrErgaenzen.add(new Aktion(Art.KONFLIKT, film, List.of(), "Jahr ergänzen nicht möglich, existiert schon: "
+            jahrErgaenzen.add(new Aktion(Art.KONFLIKT, film, List.of(), grund + " nicht möglich, existiert schon: "
                     + neuerOrdner));
             return;
         }
         String alterName = vorhanden.info().zielName();
-        String neuerName = mitJahr.zielName();
+        String neuerName = neu.zielName();
         List<Verschiebung> verschiebungen = new ArrayList<>();
         try (Stream<Path> dateien = Files.walk(ordner)) {
             for (Path datei : dateien.filter(Files::isRegularFile).sorted().toList()) {
                 String name = datei.getFileName().toString();
-                String neu = name.startsWith(alterName + ".") || name.startsWith(alterName + " - ")
+                String neuerDateiname = name.startsWith(alterName + ".") || name.startsWith(alterName + " - ")
                         ? neuerName + name.substring(alterName.length()) : name;
-                verschiebungen.add(new Verschiebung(datei, neuerOrdner.resolve(ordner.relativize(datei)).resolveSibling(neu)));
+                verschiebungen.add(new Verschiebung(datei, neuerOrdner.resolve(ordner.relativize(datei)).resolveSibling(neuerDateiname)));
             }
         }
-        jahrErgaenzen.add(new Aktion(Art.JAHR_ERGAENZEN, film, verschiebungen,
-                "Jahr ergänzen: " + alterName + " wird " + neuerName));
+        jahrErgaenzen.add(new Aktion(Art.UMBENENNEN, film, verschiebungen,
+                grund + ": " + alterName + " wird " + neuerName));
+    }
+
+    /** Ab so vielen Filmen behalten nummerierte Reihenfilme den Reihennamen im Titel ("Star Trek - Der Film"). */
+    static final int REIHENNAME_AB = 4;
+
+    /** Normalisierte Reihen, zu denen (Import und Sammlung zusammen) mehr als drei Filme gehören. */
+    private Set<String> grosseReihen = Set.of();
+
+    private Set<String> grosseReihenBestimmen(List<Film> filme) {
+        Map<String, Set<String>> filmeJeReihe = new HashMap<>();
+        for (Film f : filme) {
+            if (f.erkannt() && !f.vorlaeufig() && !f.info().istFolge()) {
+                String reihe = reiheFuer(f.video(), f.info());
+                if (!reihe.isEmpty()) {
+                    filmeJeReihe.computeIfAbsent(FilmInfo.normalisieren(reihe), k -> new HashSet<>())
+                            .add(FilmInfo.normalisieren(f.info().mitReihe(reihe).basisTitel()));
+                }
+            }
+        }
+        for (Katalog.Eintrag e : katalog.eintraege()) {
+            if (!e.info().istFolge() && !e.info().reihe().isEmpty()) {
+                filmeJeReihe.computeIfAbsent(FilmInfo.normalisieren(e.info().reihe()), k -> new HashSet<>())
+                        .add(FilmInfo.normalisieren(e.info().basisTitel()));
+            }
+        }
+        Set<String> gross = new HashSet<>();
+        filmeJeReihe.forEach((reihe, titel) -> {
+            if (titel.size() >= REIHENNAME_AB) {
+                gross.add(reihe);
+            }
+        });
+        return gross;
+    }
+
+    /** Ob ein nummerierter Reihenfilm den Reihennamen im Titel trägt: bei Reihen mit mehr als drei Filmen. */
+    private boolean mitReihenname(FilmInfo info) {
+        return info.nummer() > 0 && !info.reihe().isEmpty() && grosseReihen.contains(FilmInfo.normalisieren(info.reihe()));
+    }
+
+    /** Nummerierte Filme der Sammlung, deren Titel den Reihennamen tragen sollte (oder nicht mehr), umbenennen. */
+    private void reihennamenAnpassen(List<Aktion> geplant) throws IOException {
+        // Ordner, aus denen in diesem Lauf schon etwas verschoben wird (z.B. beim Ersetzen), bleiben unberührt.
+        Set<Path> belegt = new HashSet<>();
+        geplant.forEach(a -> a.verschiebungen().forEach(v -> belegt.add(v.von().toAbsolutePath().normalize().getParent())));
+        for (Katalog.Eintrag e : katalog.eintraege()) {
+            if (e.info().istFolge() || e.info().nummer() == 0 || e.info().reihe().isEmpty()) {
+                continue;
+            }
+            Path video = alteDatei(e);
+            if (video == null || belegt.contains(video.toAbsolutePath().normalize().getParent())) {
+                continue;
+            }
+            FilmInfo soll = e.info().mitReihennameImTitel(mitReihenname(e.info()));
+            if (!soll.zielName().equals(e.info().zielName())) {
+                umbenennenVorschlagen(e, soll, mitReihenname(e.info()) ? "Reihenname in den Titel" : "Reihenname aus dem Titel");
+            }
+        }
     }
 
     private Aktion gegenSammlung(Film neuerFilm) throws IOException {
