@@ -45,6 +45,8 @@ public final class Main {
         } else if (args.length == 2 && args[0].equals("rueckgaengig")) {
             int anzahl = Ausfuehrung.rueckgaengig(Path.of(args[1]), aus);
             aus.println(anzahl < 0 ? "Nichts rückgängig zu machen." : anzahl + " Dateien zurückverschoben.");
+        } else if (abgleich(args, "abgleichen")) {
+            abgleichAusgeben(Abgleich.abgleichen(Path.of(args[1]), Path.of(args[2]), inSich(args)), aus);
         } else {
             aus.println(hilfe());
         }
@@ -63,7 +65,47 @@ public final class Main {
                                                  identische und schlechtere in die Quarantäne _Doubletten,
                                                  bessere ersetzen die vorhandene Fassung
                   --doubletten=liegen            alle Doubletten in der Quelle liegen lassen
+
+                  abgleichen <A> <B>             gleicht zwei organisierte Sammlungen auf Doubletten ab,
+                                                 ändert nichts (A ist die Hauptsammlung)
+                  --auch-in-sich                 prüft zusätzlich jede Sammlung in sich
                 """;
+    }
+
+    private static boolean abgleich(String[] args, String befehl) {
+        return args[0].equals(befehl) && (args.length == 3 || args.length == 4 && args[3].equals("--auch-in-sich"));
+    }
+
+    private static boolean inSich(String[] args) {
+        return args.length == 4 && args[3].equals("--auch-in-sich");
+    }
+
+    /** Gibt die Funde eines Abgleichs nach Art gruppiert mit Vorschlag aus. */
+    static void abgleichAusgeben(List<Abgleich.Fund> funde, PrintStream aus) throws IOException {
+        if (funde.isEmpty()) {
+            aus.println("Keine Doubletten gefunden.");
+            return;
+        }
+        for (Abgleich.Art art : Abgleich.Art.values()) {
+            List<Abgleich.Fund> mitArt = funde.stream().filter(f -> f.art() == art).toList();
+            if (mitArt.isEmpty()) {
+                continue;
+            }
+            aus.println();
+            aus.println(art.text() + " (" + mitArt.size() + ")");
+            for (Abgleich.Fund f : mitArt) {
+                aus.println("  " + f.erste().info().titel()
+                        + (f.erste().info().jahr() > 0 ? " (" + f.erste().info().jahr() + ")" : ""));
+                aus.println("      1 " + f.erste().anzeige());
+                aus.println("      2 " + f.zweite().anzeige());
+                aus.println("      " + f.hinweis());
+                aus.println("      Vorschlag: " + f.vorschlag().text());
+                for (Aktion.Verschiebung v : Abgleich.verschiebungen(f, f.vorschlag())) {
+                    aus.println("      " + v.von().getFileName() + " -> " + v.nach());
+                }
+            }
+        }
+        aus.println();
     }
 
     private static boolean mitSchalter(String[] args, String befehl) {

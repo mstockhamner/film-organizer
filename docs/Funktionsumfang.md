@@ -60,6 +60,13 @@ Stufenweise, damit nicht jede Datei komplett gelesen werden muss:
 - **Kommandozeile:** `--doubletten=quarantaene` (Standard, Vorschläge wie oben) oder `--doubletten=liegen` (alle Doubletten bleiben in der Quelle) hinter `vorschau` bzw. `ausfuehren`.
 - **Fassungen** (entschieden 18.10.2026): Extended, Director's Cut, Final Cut, Unrated und Uncut werden im Namen erkannt. Ohne Angabe oder mit „Kinofassung“/„Theatrical“ gilt die Kinofassung. Eine andere Fassung eines vorhandenen oder im selben Lauf einsortierten Films ist keine Doublette: Es wird nachgefragt, auch wenn sie eine niedrigere Auflösung hat. Bis dahin bleibt sie liegen. Wahlmöglichkeiten in der Spalte „Entscheidung“ bzw. auf der Kommandozeile beim `ausfuehren`: „Beide behalten“ (dann im selben Ordner als `Titel (Jahr) - Extended.<Endung>`, Begleitdateien mit diesem Namen), „In Quarantäne“ oder liegen lassen.
 
+### 3.3a Sammlungen abgleichen (ergänzt 20.10.2026)
+- Zwei schon organisierte Sammlungen A und B auf Doubletten abgleichen; A ist die Hauptsammlung. Auf Wunsch wird jede Sammlung zusätzlich in sich geprüft.
+- Grundlage sind die Kataloge samt von Hand abgelegter Ordner (Filme, Filmreihen, Serienfolgen, Sendungen). Gleich ist derselbe Film (Titel und Jahr bzw. Serie und Folge); dazu identische Dateien unter anderem Titel (gleiche Größe und Prüfsumme).
+- Welche Fassung bleibt, folgt denselben Regeln wie beim Einsortieren: identisch → A behalten; sonst höhere Auflösung, dann größere Datei; nicht eindeutig → bitte wählen; andere Schnittfassung → beide behalten.
+- Die nicht behaltene Fassung kommt mit ihren Begleitdateien in die Quarantäne ihrer eigenen Sammlung (`A\_Doubletten` bzw. `B\_Doubletten`), zwischen den Sammlungen wird nichts kopiert. Zusammenführen (Filme nur in B nach A) gehört nicht dazu.
+- Kommandozeile: `abgleichen <A> <B> [--auch-in-sich]` zeigt die Funde mit Vorschlag, ändert nichts.
+
 ### 3.4 Neue Struktur
 - Die Filme werden aus den Quellordnern in einen **neuen Zielordner** verschoben (entschieden 18.10.2026). Ordner unter der Quelle, die dadurch ganz leer werden (auch mit leeren Unterordnern), werden danach entfernt (ergänzt 18.10.2026). Als leer gilt auch ein Ordner, in dem nur noch Systemreste liegen (`Thumbs.db`, `ehthumbs.db`, `desktop.ini`, `.DS_Store`, `@eaDir` der Synology); die Reste werden direkt gelöscht (entschieden 18.10.2026). Die Quelle selbst, Ordner oberhalb der Quelle und Ordner mit anderen Dateien bleiben stehen. Rückgängig legt die Ordner wieder an.
 - Liegt der Zielordner auf einem anderen Laufwerk, wird zuerst kopiert, die Kopie geprüft (Größe und Prüfsumme) und erst dann die Quelldatei entfernt.

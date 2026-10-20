@@ -480,9 +480,21 @@ public final class Planer {
     }
 
     private Path inQuarantaene(Path datei) {
+        return quarantaenePfad(quarantaene, datei);
+    }
+
+    /**
+     * Platz einer Datei in der Quarantäne einer Sammlung: {@code Ziel/_Doubletten/<heute>/<alter Pfad ohne
+     * Laufwerk>}.
+     */
+    static Path inQuarantaene(Path ziel, Path datei) {
+        return quarantaenePfad(ziel.resolve(QUARANTAENE).resolve(LocalDate.now().toString()), datei);
+    }
+
+    private static Path quarantaenePfad(Path quarantaeneHeute, Path datei) {
         Path absolut = datei.toAbsolutePath().normalize();
         Path ohneLaufwerk = absolut.getRoot() == null ? absolut : absolut.getRoot().relativize(absolut);
-        return quarantaene.resolve(ohneLaufwerk);
+        return quarantaeneHeute.resolve(ohneLaufwerk);
     }
 
     private boolean identisch(Film film, Katalog.Eintrag eintrag) throws IOException {
