@@ -39,6 +39,9 @@ public final class Planer {
     /** Ordner im Ziel, in den Doubletten verschoben werden, statt sie zu löschen. */
     public static final String QUARANTAENE = "_Doubletten";
 
+    /** Auswahl für Filme mit vorläufigem Titel aus dem Dateinamen. */
+    private static final List<Entscheidung> BENENNEN_AUSWAHL = List.of(Entscheidung.BENENNEN, Entscheidung.TITEL_UEBERNEHMEN);
+
     private final Path ziel;
     private final Path quarantaene;
     private final Katalog katalog;
@@ -90,6 +93,11 @@ public final class Planer {
         for (Film film : filme) {
             if (!film.erkannt()) {
                 aktionen.add(new Aktion(Art.UNERKANNT, film, List.of(), "Titel nicht erkennbar"));
+            } else if (film.vorlaeufig() && entscheidungen.get(film.video()) != Entscheidung.TITEL_UEBERNEHMEN) {
+                // Vorläufiger Titel aus dem Dateinamen: bleibt liegen, bis er korrekt benannt oder bewusst übernommen ist.
+                aktionen.add(new Aktion(Art.UNERKANNT, film, List.of(),
+                        "vorläufiger Titel aus dem Dateinamen, bitte korrekt benennen")
+                        .mit(Entscheidung.BENENNEN, Entscheidung.BENENNEN, BENENNEN_AUSWAHL));
             } else {
                 nachSchluessel.computeIfAbsent(film.info().fassungsSchluessel(), k -> new ArrayList<>()).add(film);
             }
@@ -131,6 +139,9 @@ public final class Planer {
         eindeutig.sort(BESSER_ZUERST);
         for (Film film : eindeutig) {
             Aktion aktion = gegenSammlung(mitReihe(film, reiheFuer(film.video(), film.info())));
+            if (film.vorlaeufig() && aktion.auswahl().isEmpty()) {
+                aktion = aktion.mit(Entscheidung.TITEL_UEBERNEHMEN, Entscheidung.BENENNEN, BENENNEN_AUSWAHL);
+            }
             if (aktion.art() == Art.EINSORTIEREN) {
                 eingeplant.add(new Katalog.Eintrag(aktion.film().info(),
                         ziel.relativize(aktion.verschiebungen().get(0).nach()).toString(), film.groesse()));
@@ -149,7 +160,7 @@ public final class Planer {
      */
     private Map<String, String> reihenErkennen(List<Film> filme) {
         List<String> titel = new ArrayList<>();
-        filme.stream().filter(f -> f.erkannt() && !f.info().istFolge()).forEach(f -> titel.add(f.info().titel()));
+        filme.stream().filter(f -> f.erkannt() && !f.vorlaeufig() && !f.info().istFolge()).forEach(f -> titel.add(f.info().titel()));
         List<Katalog.Eintrag> sammlung = katalog.eintraege().stream().filter(e -> !e.info().istFolge()).toList();
         sammlung.forEach(e -> titel.add(e.info().titel()));
         Map<String, String> reihen = new HashMap<>(Filmreihen.erkennen(titel));
@@ -220,7 +231,7 @@ public final class Planer {
     }
 
     private static Film mitReihe(Film film, String reihe) {
-        return new Film(film.video(), film.groesse(), film.info().mitReihe(reihe), film.begleitdateien());
+        return film.mitInfo(film.info().mitReihe(reihe));
     }
 
     /**
@@ -289,8 +300,8 @@ public final class Planer {
                 .forEach(fassungen::add);
         // Weitere Fassungen und Ersatz kommen in den Ordner, in dem der Film schon liegt.
         Film film = fassungen.isEmpty() || neuerFilm.info().istFolge() ? neuerFilm
-                : new Film(neuerFilm.video(), neuerFilm.groesse(), neuerFilm.info().mitReihe(fassungen.get(0).info().reihe())
-                        .mitNummer(fassungen.get(0).info().nummer()), neuerFilm.begleitdateien());
+                : neuerFilm.mitInfo(neuerFilm.info().mitReihe(fassungen.get(0).info().reihe())
+                        .mitNummer(fassungen.get(0).info().nummer()));
         Katalog.Eintrag vorhanden = fassungen.stream()
                 .filter(e -> e.info().fassungsSchluessel().equals(film.info().fassungsSchluessel()))
                 .findFirst().orElse(null);

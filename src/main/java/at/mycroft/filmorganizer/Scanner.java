@@ -76,7 +76,17 @@ public final class Scanner {
         Collections.sort(videos);
         List<Film> filme = new ArrayList<>();
         for (Path video : videos) {
-            filme.add(new Film(video, Files.size(video), erkennen(video, quelleAbs), begleitdateien(video)));
+            FilmInfo info = erkennen(video, quelleAbs);
+            boolean vorlaeufig = false;
+            if (info == null) {
+                // Nichts erkannt: der Dateiname wird vorläufiger Titel, der noch korrekt benannt werden muss.
+                String titel = NamensErkennung.vorlaeufigerTitel(Dateinamen.ohneEndung(name(video)));
+                if (!titel.isEmpty()) {
+                    info = new FilmInfo(titel, 0, NamensErkennung.aufloesung(name(video).replace('.', ' ')));
+                    vorlaeufig = true;
+                }
+            }
+            filme.add(new Film(video, Files.size(video), info, begleitdateien(video), vorlaeufig));
         }
         LOG.info(() -> filme.size() + " Videodateien in " + quelleAbs + " gefunden, davon "
                 + filme.stream().filter(Film::erkannt).count() + " mit erkanntem Titel und Jahr");

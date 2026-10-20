@@ -108,6 +108,17 @@ public final class NamensErkennung {
     }
 
     /**
+     * Vorläufiger Titel aus einem beliebigen Namen ohne erkennbares Schema: der Name ohne Technik-Angaben,
+     * z.B. "irgendwas" aus {@code irgendwas.720p}. Leer, wenn nichts übrig bleibt.
+     */
+    public static String vorlaeufigerTitel(String name) {
+        String text = vereinfachen(name);
+        Matcher aufl = AUFLOESUNG.matcher(text);
+        String kopf = aufl.find() ? text.substring(0, aufl.start()) : text;
+        return aufraeumen(bisZurTechnik(kopf));
+    }
+
+    /**
      * Erkennt einen Film einer Reihe nach dem Schema {@code Reihe - Nummer - Titel} oder
      * {@code Reihe Nummer - Titel}, z.B. {@code Star Trek 04 - Zurück in die Gegenwart}: Titel
      * "Zurück in die Gegenwart" in der Filmreihe

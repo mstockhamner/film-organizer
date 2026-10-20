@@ -3,6 +3,7 @@ package at.mycroft.filmorganizer;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import at.mycroft.filmorganizer.Aktion.Art;
+import at.mycroft.filmorganizer.Aktion.Entscheidung;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -57,6 +58,33 @@ class VorschlaegeTest {
         Aktion aktion = aktion(v.plan(), unbekannt);
         assertEquals(Art.EINSORTIEREN, aktion.art());
         assertEquals(720, aktion.film().info().aufloesung());
+    }
+
+    @Test
+    void dateinameAlsVorlaeufigerTitel() throws IOException {
+        Vorschlaege v = Vorschlaege.einlesen(quelle, ziel);
+        Aktion aktion = aktion(v.plan(), unbekannt);
+        assertEquals(Art.UNERKANNT, aktion.art(), "bleibt liegen, bis korrekt benannt");
+        assertEquals("irgendwas", v.titel(aktion.film()));
+        assertEquals(Entscheidung.BENENNEN, aktion.entscheidung());
+        assertEquals(List.of(Entscheidung.BENENNEN, Entscheidung.TITEL_UEBERNEHMEN), aktion.auswahl());
+
+        // Nur ein Jahr eintragen reicht nicht: der Titel ist weiter der vorläufige.
+        v.korrigieren(unbekannt, "irgendwas", 2001);
+        assertEquals(Art.UNERKANNT, art(v.plan(), unbekannt));
+
+        // Bewusst so übernehmen …
+        v.entscheiden(unbekannt, Entscheidung.TITEL_UEBERNEHMEN);
+        Aktion uebernommen = aktion(v.plan(), unbekannt);
+        assertEquals(Art.EINSORTIEREN, uebernommen.art());
+        assertEquals(ziel.resolve("irgendwas (2001)/irgendwas (2001).mkv"), uebernommen.verschiebungen().get(0).nach());
+        assertEquals(Entscheidung.TITEL_UEBERNEHMEN, uebernommen.entscheidung());
+
+        // … oder korrekt benennen.
+        v.entscheiden(unbekannt, Entscheidung.BENENNEN);
+        v.korrigieren(unbekannt, "Der Pate", 1972);
+        assertEquals(ziel.resolve("Der Pate (1972)/Der Pate (1972).mkv"),
+                aktion(v.plan(), unbekannt).verschiebungen().get(0).nach());
     }
 
     @Test

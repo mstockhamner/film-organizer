@@ -38,8 +38,12 @@ class PlanTabelleTest {
                 tabelle.getValueAt(0, PlanTabelle.GEFUNDEN));
         assertEquals(Path.of("Der gestiefelte Kater (2011)", "Der gestiefelte Kater (2011).mkv").toString(),
                 tabelle.getValueAt(0, PlanTabelle.NEUER_ORT));
-        assertEquals("Nicht erkannt", tabelle.getValueAt(1, PlanTabelle.STATUS));
-        assertEquals("Titel in der Tabelle eintragen (Jahr nach Wunsch)", tabelle.getValueAt(1, PlanTabelle.NEUER_ORT));
+        // "irgendwas.mkv": Dateiname als vorläufiger Titel, muss noch benannt werden.
+        assertEquals(PlanTabelle.TITEL_PRUEFEN, tabelle.getValueAt(1, PlanTabelle.STATUS));
+        assertEquals("irgendwas", tabelle.getValueAt(1, PlanTabelle.TITEL));
+        assertEquals("vorläufiger Titel aus dem Dateinamen, bitte korrekt benennen",
+                tabelle.getValueAt(1, PlanTabelle.NEUER_ORT));
+        assertEquals("noch korrekt benennen (Vorschlag)", tabelle.getValueAt(1, PlanTabelle.ENTSCHEIDUNG));
         assertTrue(tabelle.isCellEditable(1, PlanTabelle.TITEL));
 
         tabelle.setValueAt("Der Pate", 1, PlanTabelle.TITEL);

@@ -374,8 +374,6 @@ public final class Vorschlaege {
         if (k == null) {
             return film;
         }
-        // Bei Serienfolgen bleiben Staffel und Folge erhalten, das Jahr ist dort nicht nötig.
-        boolean folge = film.info() != null && film.info().istFolge();
         FilmInfo info = null;
         if (!k.titel().isEmpty()) {
             int aufloesung = film.info() != null ? film.info().aufloesung()
@@ -386,6 +384,9 @@ public final class Vorschlaege {
                     : new FilmInfo(k.titel(), k.jahr(), aufloesung, 0, 0,
                             NamensErkennung.fassung(Dateinamen.ohneEndung(film.video().getFileName().toString())));
         }
-        return new Film(film.video(), film.groesse(), info, film.begleitdateien());
+        // Ein vorläufiger Titel aus dem Dateinamen gilt erst als benannt, wenn er geändert wurde.
+        boolean nochVorlaeufig = film.vorlaeufig() && film.info() != null
+                && FilmInfo.normalisieren(k.titel()).equals(FilmInfo.normalisieren(film.info().titel()));
+        return new Film(film.video(), film.groesse(), info, film.begleitdateien(), nochVorlaeufig);
     }
 }

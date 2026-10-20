@@ -76,7 +76,11 @@ public record Aktion(Art art, Film film, List<Verschiebung> verschiebungen, Stri
         /** Ersetzt die vorhandene Fassung, die in die Quarantäne kommt. */
         ERSETZEN("Ersetzen"),
         /** Bleibt in der Quelle liegen. */
-        LIEGEN_LASSEN("Liegen lassen");
+        LIEGEN_LASSEN("Liegen lassen"),
+        /** Vorläufiger Titel aus dem Dateinamen: muss noch korrekt benannt werden, bleibt bis dahin liegen. */
+        BENENNEN("noch korrekt benennen"),
+        /** Vorläufigen Titel aus dem Dateinamen bewusst so übernehmen. */
+        TITEL_UEBERNEHMEN("Titel so übernehmen");
 
         private final String text;
 

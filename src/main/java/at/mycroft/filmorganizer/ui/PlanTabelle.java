@@ -30,6 +30,8 @@ final class PlanTabelle extends AbstractTableModel {
     static final String IN_QUARANTAENE = "Doublette → Quarantäne";
     static final String ERSETZT = "Ersetzt vorhandene";
     static final String UMSORTIERT = "Wird umsortiert";
+    /** Vorläufiger Titel aus dem Dateinamen, der noch korrekt benannt werden muss. */
+    static final String TITEL_PRUEFEN = "Titel prüfen";
 
     private static final String[] SPALTEN = {"Übernehmen", "Status", "Titel", "Jahr", "Gefunden in",
         "Neuer Ort / Hinweis", "Entscheidung", "Filmreihe"};
@@ -104,7 +106,8 @@ final class PlanTabelle extends AbstractTableModel {
         Aktion aktion = plan.get(index);
         return switch (spalte) {
             case UEBERNEHMEN -> !vorschlaege.istAusgelassen(aktion.film().video());
-            case STATUS -> aktion.inQuarantaene() ? IN_QUARANTAENE : status(aktion.art());
+            case STATUS -> aktion.inQuarantaene() ? IN_QUARANTAENE
+                    : aktion.entscheidung() == Entscheidung.BENENNEN ? TITEL_PRUEFEN : status(aktion.art());
             case TITEL -> vorschlaege.titel(aktion.film());
             case JAHR -> {
                 int jahr = vorschlaege.jahr(aktion.film());
