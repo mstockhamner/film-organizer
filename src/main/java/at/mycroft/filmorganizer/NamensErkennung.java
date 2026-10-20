@@ -29,8 +29,11 @@ public final class NamensErkennung {
     /** Aufnahme eines Sat-Receivers: Datum, Uhrzeit, Sender, Titel, z.B. {@code 20200612 2226 - ATV HD - Titel}. */
     private static final Pattern AUFNAHME = Pattern.compile(
             "^((?:19|20)[0-9]{2})([0-9]{2})([0-9]{2}) ([0-9]{4}) - (.+?) - (.+)$");
-    /** Film einer Reihe mit Nummer: {@code Star Trek - 04 - Zurück in die Gegenwart}. */
-    private static final Pattern REIHENFILM = Pattern.compile("^(.+?) - ([0-9]{1,2}) - (.+)$");
+    /**
+     * Film einer Reihe mit Nummer: {@code Star Trek - 04 - Zurück in die Gegenwart} oder
+     * {@code Star Trek 04 - Zurück in die Gegenwart}.
+     */
+    private static final Pattern REIHENFILM = Pattern.compile("^(.+?)(?: - | )([0-9]{1,2}) - (.+)$");
 
     /** Teil einer gestückelten Aufnahme wie {@code …_001}. */
     private static final Pattern TEIL = Pattern.compile("_[0-9]{3}$");
@@ -105,8 +108,9 @@ public final class NamensErkennung {
     }
 
     /**
-     * Erkennt einen Film einer Reihe nach dem Schema {@code Reihe - Nummer - Titel}, z.B.
-     * {@code Star Trek - 04 - Zurück in die Gegenwart}: Titel "Zurück in die Gegenwart" in der Filmreihe
+     * Erkennt einen Film einer Reihe nach dem Schema {@code Reihe - Nummer - Titel} oder
+     * {@code Reihe Nummer - Titel}, z.B. {@code Star Trek 04 - Zurück in die Gegenwart}: Titel
+     * "Zurück in die Gegenwart" in der Filmreihe
      * "Star Trek". Ein Jahr am Ende ({@code (1986)} oder {@code 1986}) wird übernommen, sonst ist es 0 und
      * wird in der Vorschau nachgetragen. Technik-Angaben wie {@code 1080p} werden abgeschnitten.
      */

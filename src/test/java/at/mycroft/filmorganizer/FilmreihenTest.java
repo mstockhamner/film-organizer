@@ -14,6 +14,8 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 /** Filme einer Reihe wie Harry Potter kommen in einen gemeinsamen Ordner. */
 class FilmreihenTest {
@@ -132,8 +134,25 @@ class FilmreihenTest {
         assertEquals(new FilmInfo("Das unentdeckte Land", 1991, 0, 0, 0, "", "Star Trek").mitNummer(6),
                 NamensErkennung.erkennen("Star Trek - 6 - Das unentdeckte Land 1991").orElseThrow());
         assertTrue(NamensErkennung.erkennen("Star Trek - 04 - Zurück in die Gegenwart").isEmpty(), "ohne Jahr");
-        assertTrue(NamensErkennung.erkennenReihenfilm("Gregs Tagebuch 2 - Gibt's Probleme").isEmpty());
         assertTrue(NamensErkennung.erkennenReihenfilm("Kevin - Allein zu Haus").isEmpty());
+    }
+
+    /** Die Namen aus V:\Filme\sort\Star Trek (Reihe und Nummer ohne Bindestrich dazwischen). */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+            Star Trek 01 - Der Film                         | Der Film                        | 1
+            Star Trek 03 - Auf der suche nach Mr Spock      | Auf der suche nach Mr Spock     | 3
+            Star Trek 04 - Zurück in die Gegenwart          | Zurück in die Gegenwart         | 4
+            Star Trek - 04 - Zurück in die Gegenwart        | Zurück in die Gegenwart         | 4
+            Star Trek 10 - Nemesis                          | Nemesis                         | 10
+            Star Trek 12 - Into Darkness                    | Into Darkness                   | 12
+            Gregs Tagebuch 2 - Gibt's Probleme              | Gibt's Probleme                 | 2
+            """)
+    void reiheUndNummerMitOderOhneBindestrich(String name, String titel, int nummer) {
+        FilmInfo info = NamensErkennung.erkennenReihenfilm(name).orElseThrow();
+        assertEquals(titel, info.titel());
+        assertEquals(nummer, info.nummer());
+        assertTrue(info.reihe().equals("Star Trek") || info.reihe().equals("Gregs Tagebuch"));
     }
 
     @Test
