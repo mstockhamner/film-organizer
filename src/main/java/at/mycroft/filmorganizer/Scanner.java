@@ -246,7 +246,7 @@ public final class Scanner {
         int aufloesung = info.aufloesung() != 0 ? info.aufloesung()
                 : NamensErkennung.aufloesung(datei.replace('.', ' '));
         String fassung = !info.fassung().isEmpty() ? info.fassung() : NamensErkennung.fassung(Dateinamen.ohneEndung(datei));
-        return new FilmInfo(info.titel(), info.jahr(), aufloesung, 0, 0, fassung, info.reihe());
+        return info.mitAufloesungUndFassung(aufloesung, fassung);
     }
 
     /**

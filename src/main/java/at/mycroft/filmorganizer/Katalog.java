@@ -29,6 +29,8 @@ public final class Katalog {
     /** Ordner im Ziel, die weder Film noch Filmreihe sind (in Kleinbuchstaben). */
     private static final Set<String> SONDERORDNER = Set.of(FilmInfo.SERIEN.toLowerCase(Locale.ROOT),
             Planer.QUARANTAENE.toLowerCase(Locale.ROOT), VERWALTUNG, "#recycle", "@eadir");
+    /** Ordner eines nummerierten Films in einer Reihe: {@code 04 - Zurück in die Gegenwart (1986)}. */
+    private static final Pattern NUMMER_IM_ORDNER = Pattern.compile("^([0-9]{1,2}) - (.+)$");
     private static final Pattern ZIELFOLGE = Pattern.compile("^(.+) - S(\\d{2,})E(\\d{2,})$");
 
     /**
@@ -61,7 +63,7 @@ public final class Katalog {
                             teile.length >= 7 ? Integer.parseInt(teile[5]) : 0,
                             teile.length >= 7 ? Integer.parseInt(teile[6]) : 0,
                             teile.length >= 8 ? teile[7] : "", reiheAusPfad(teile[3]),
-                            teile.length == 9 ? teile[8] : "");
+                            teile.length == 9 ? teile[8] : "", nummerAusPfad(teile[3]));
                     eintraege.add(new Eintrag(info, teile[3], Long.parseLong(teile[4])));
                 }
             }
@@ -98,10 +100,27 @@ public final class Katalog {
         if (!m.matches()) {
             return;
         }
-        FilmInfo info = new FilmInfo(m.group(1), Integer.parseInt(m.group(2)), 0, 0, 0, "", reihe);
+        String titel = m.group(1);
+        int nummer = 0;
+        Matcher mitNummer = NUMMER_IM_ORDNER.matcher(titel);
+        if (!reihe.isEmpty() && mitNummer.matches()) {
+            nummer = Integer.parseInt(mitNummer.group(1));
+            titel = mitNummer.group(2);
+        }
+        FilmInfo info = new FilmInfo(titel, Integer.parseInt(m.group(2)), 0, 0, 0, "", reihe).mitNummer(nummer);
         if (finden(info.schluessel()) == null) {
             eintraege.add(new Eintrag(info, ziel.relativize(ordner).toString(), 0));
         }
+    }
+
+    /** Nummer eines Films in seiner Reihe aus dem Ordnernamen ({@code Star Trek/04 - Titel (Jahr)/…}), sonst 0. */
+    static int nummerAusPfad(String video) {
+        Path pfad = Path.of(video);
+        if (reiheAusPfad(video).isEmpty() || pfad.getNameCount() < 2) {
+            return 0;
+        }
+        Matcher m = NUMMER_IM_ORDNER.matcher(pfad.getName(1).toString());
+        return m.matches() ? Integer.parseInt(m.group(1)) : 0;
     }
 
     /**

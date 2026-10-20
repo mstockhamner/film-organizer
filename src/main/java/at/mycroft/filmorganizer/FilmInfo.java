@@ -16,27 +16,33 @@ import java.util.Locale;
  * @param reihe      Filmreihe wie {@code Harry Potter}, in deren Ordner der Film liegt; leer, wenn er zu keiner gehört
  * @param folgentitel Titel einer Folge einer Sendereihe ohne Staffel- und Folgennummer, z.B. bei Terra X
  *                    "Eine Erde - viele Welten - Inseln"; leer bei Filmen und nummerierten Folgen
+ * @param nummer     Nummer eines Films in seiner Reihe ({@code Star Trek - 04 - …} = 4), 0 wenn keine; steht im Ordnernamen
  */
 public record FilmInfo(String titel, int jahr, int aufloesung, int staffel, int folge, String fassung, String reihe,
-        String folgentitel) {
+        String folgentitel, int nummer) {
 
     /** Unterordner im Ziel, in dem die Serien liegen. */
     static final String SERIEN = "Serien";
 
     public FilmInfo(String titel, int jahr, int aufloesung) {
-        this(titel, jahr, aufloesung, 0, 0, "", "", "");
+        this(titel, jahr, aufloesung, 0, 0, "", "", "", 0);
     }
 
     public FilmInfo(String titel, int jahr, int aufloesung, int staffel, int folge) {
-        this(titel, jahr, aufloesung, staffel, folge, "", "", "");
+        this(titel, jahr, aufloesung, staffel, folge, "", "", "", 0);
     }
 
     public FilmInfo(String titel, int jahr, int aufloesung, int staffel, int folge, String fassung) {
-        this(titel, jahr, aufloesung, staffel, folge, fassung, "", "");
+        this(titel, jahr, aufloesung, staffel, folge, fassung, "", "", 0);
     }
 
     public FilmInfo(String titel, int jahr, int aufloesung, int staffel, int folge, String fassung, String reihe) {
-        this(titel, jahr, aufloesung, staffel, folge, fassung, reihe, "");
+        this(titel, jahr, aufloesung, staffel, folge, fassung, reihe, "", 0);
+    }
+
+    public FilmInfo(String titel, int jahr, int aufloesung, int staffel, int folge, String fassung, String reihe,
+            String folgentitel) {
+        this(titel, jahr, aufloesung, staffel, folge, fassung, reihe, folgentitel, 0);
     }
 
     /** Folge einer Sendereihe mit Folgentitel statt Nummer. */
@@ -46,17 +52,27 @@ public record FilmInfo(String titel, int jahr, int aufloesung, int staffel, int 
 
     /** Dieselbe Angabe mit einer anderen Fassung. */
     public FilmInfo mitFassung(String andereFassung) {
-        return new FilmInfo(titel, jahr, aufloesung, staffel, folge, andereFassung, reihe, folgentitel);
+        return new FilmInfo(titel, jahr, aufloesung, staffel, folge, andereFassung, reihe, folgentitel, nummer);
     }
 
     /** Dieselbe Angabe in einer anderen Filmreihe (leer: in keiner). */
     public FilmInfo mitReihe(String andereReihe) {
-        return new FilmInfo(titel, jahr, aufloesung, staffel, folge, fassung, andereReihe, folgentitel);
+        return new FilmInfo(titel, jahr, aufloesung, staffel, folge, fassung, andereReihe, folgentitel, nummer);
     }
 
     /** Dieselbe Angabe mit von Hand korrigiertem Titel und Jahr. */
     public FilmInfo mitTitelUndJahr(String andererTitel, int anderesJahr) {
-        return new FilmInfo(andererTitel, anderesJahr, aufloesung, staffel, folge, fassung, reihe, folgentitel);
+        return new FilmInfo(andererTitel, anderesJahr, aufloesung, staffel, folge, fassung, reihe, folgentitel, nummer);
+    }
+
+    /** Dieselbe Angabe mit einer anderen Nummer in der Reihe. */
+    public FilmInfo mitNummer(int andereNummer) {
+        return new FilmInfo(titel, jahr, aufloesung, staffel, folge, fassung, reihe, folgentitel, andereNummer);
+    }
+
+    /** Dieselbe Angabe mit anderer Auflösung und Fassung. */
+    public FilmInfo mitAufloesungUndFassung(int andereAufloesung, String andereFassung) {
+        return new FilmInfo(titel, jahr, andereAufloesung, staffel, folge, andereFassung, reihe, folgentitel, nummer);
     }
 
     /** Serienfolge statt Film: nummeriert ({@code S01E02}) oder als Folge einer Sendereihe mit Folgentitel. */
@@ -86,11 +102,17 @@ public record FilmInfo(String titel, int jahr, int aufloesung, int staffel, int 
         if (istFolge()) {
             return Dateinamen.bereinigen(titel) + " - " + kennung();
         }
-        return fassung.isEmpty() ? ordnerName() : ordnerName() + " - " + Dateinamen.bereinigen(fassung);
+        return fassung.isEmpty() ? titelUndJahr() : titelUndJahr() + " - " + Dateinamen.bereinigen(fassung);
     }
 
-    private String ordnerName() {
+    private String titelUndJahr() {
         return Dateinamen.bereinigen(titel) + " (" + jahr + ")";
+    }
+
+    /** Ordner eines Films: {@code Titel (Jahr)}, in einer Reihe mit Nummer {@code 04 - Titel (Jahr)}. */
+    private String ordnerName() {
+        return nummer > 0 && !reihe.isEmpty()
+                ? String.format(Locale.ROOT, "%02d - %s", nummer, titelUndJahr()) : titelUndJahr();
     }
 
     /**

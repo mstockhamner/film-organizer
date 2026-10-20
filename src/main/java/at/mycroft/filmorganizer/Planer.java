@@ -260,7 +260,8 @@ public final class Planer {
                 .forEach(fassungen::add);
         // Weitere Fassungen und Ersatz kommen in den Ordner, in dem der Film schon liegt.
         Film film = fassungen.isEmpty() || neuerFilm.info().istFolge() ? neuerFilm
-                : mitReihe(neuerFilm, fassungen.get(0).info().reihe());
+                : new Film(neuerFilm.video(), neuerFilm.groesse(), neuerFilm.info().mitReihe(fassungen.get(0).info().reihe())
+                        .mitNummer(fassungen.get(0).info().nummer()), neuerFilm.begleitdateien());
         Katalog.Eintrag vorhanden = fassungen.stream()
                 .filter(e -> e.info().fassungsSchluessel().equals(film.info().fassungsSchluessel()))
                 .findFirst().orElse(null);

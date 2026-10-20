@@ -130,7 +130,8 @@ public final class NamensErkennung {
         if (reihe.isEmpty() || titel.isEmpty() || reihe.matches("[0-9 ]+")) {
             return Optional.empty();
         }
-        return Optional.of(new FilmInfo(titel, jahr, aufloesung(text), 0, 0, fassung(text), reihe));
+        return Optional.of(new FilmInfo(titel, jahr, aufloesung(text), 0, 0, fassung(text), reihe)
+                .mitNummer(Integer.parseInt(m.group(2))));
     }
 
     /**

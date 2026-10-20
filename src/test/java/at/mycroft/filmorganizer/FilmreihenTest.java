@@ -125,11 +125,11 @@ class FilmreihenTest {
 
     @Test
     void reiheNummerUndTitelImNamen() {
-        assertEquals(new FilmInfo("Zurück in die Gegenwart", 0, 0, 0, 0, "", "Star Trek"),
+        assertEquals(new FilmInfo("Zurück in die Gegenwart", 0, 0, 0, 0, "", "Star Trek").mitNummer(4),
                 NamensErkennung.erkennenReihenfilm("Star Trek - 04 - Zurück in die Gegenwart").orElseThrow());
-        assertEquals(new FilmInfo("Zurück in die Gegenwart", 1986, 1080, 0, 0, "", "Star Trek"),
+        assertEquals(new FilmInfo("Zurück in die Gegenwart", 1986, 1080, 0, 0, "", "Star Trek").mitNummer(4),
                 NamensErkennung.erkennenReihenfilm("Star.Trek.-.04.-.Zurück.in.die.Gegenwart.(1986).1080p").orElseThrow());
-        assertEquals(new FilmInfo("Das unentdeckte Land", 1991, 0, 0, 0, "", "Star Trek"),
+        assertEquals(new FilmInfo("Das unentdeckte Land", 1991, 0, 0, 0, "", "Star Trek").mitNummer(6),
                 NamensErkennung.erkennen("Star Trek - 6 - Das unentdeckte Land 1991").orElseThrow());
         assertTrue(NamensErkennung.erkennen("Star Trek - 04 - Zurück in die Gegenwart").isEmpty(), "ohne Jahr");
         assertTrue(NamensErkennung.erkennenReihenfilm("Gregs Tagebuch 2 - Gibt's Probleme").isEmpty());
@@ -146,12 +146,38 @@ class FilmreihenTest {
         assertEquals(Art.UNERKANNT, st4.art());
         assertEquals("Zurück in die Gegenwart", v.titel(st4.film()));
         assertEquals("Star Trek", st4.film().info().reihe());
-        assertEquals(ziel().resolve("Star Trek/Das unentdeckte Land (1991)/Das unentdeckte Land (1991).mkv"),
+        assertEquals(ziel().resolve("Star Trek/06 - Das unentdeckte Land (1991)/Das unentdeckte Land (1991).mkv"),
                 aktion(v.plan(), ordner).verschiebungen().get(0).nach());
 
         v.korrigieren(ohneJahr, "Zurück in die Gegenwart", 1986);
-        assertEquals(ziel().resolve("Star Trek/Zurück in die Gegenwart (1986)/Zurück in die Gegenwart (1986).mkv"),
+        assertEquals(ziel().resolve("Star Trek/04 - Zurück in die Gegenwart (1986)/Zurück in die Gegenwart (1986).mkv"),
                 aktion(v.plan(), ohneJahr).verschiebungen().get(0).nach());
+
+        // Nach dem Einsortieren kennt der Katalog Titel und Nummer: dieselben Filme noch einmal sind Doubletten.
+        List<Aktion> plan = v.plan();
+        Ausfuehrung.ausfuehren(plan, ziel(), still);
+        Katalog katalog = Katalog.laden(ziel());
+        Katalog.Eintrag eintrag = katalog.alle(new FilmInfo("Zurück in die Gegenwart", 1986, 0).schluessel()).get(0);
+        assertEquals(4, eintrag.info().nummer());
+        assertEquals("Star Trek", eintrag.info().reihe());
+        datei("Nochmal/Star Trek - 04 - Zurück in die Gegenwart (1986) 720p.mkv", "st4 720p");
+        Aktion nochmal = Main.planErstellen(quelle, ziel()).stream()
+                .filter(x -> x.film().video().getFileName().toString().contains("720p")).findFirst().orElseThrow();
+        // Größer bei unbekannter Auflösung der alten: Vorschlag Ersetzen, und zwar im nummerierten Ordner.
+        assertEquals(Art.ERSETZEN, nochmal.art());
+        assertEquals(ziel().resolve("Star Trek/04 - Zurück in die Gegenwart (1986)/Zurück in die Gegenwart (1986).mkv"),
+                nochmal.verschiebungen().get(nochmal.verschiebungen().size() - 1).nach());
+    }
+
+    @Test
+    void vonHandAbgelegterNummerierterReihenfilm() throws IOException {
+        Path hand = ziel().resolve("Star Trek/04 - Zurück in die Gegenwart (1986)/st4.mkv");
+        Files.createDirectories(hand.getParent());
+        Files.writeString(hand, "von Hand");
+        Katalog.Eintrag eintrag = Katalog.laden(ziel()).eintraege().get(0);
+        assertEquals("Zurück in die Gegenwart", eintrag.info().titel());
+        assertEquals(4, eintrag.info().nummer());
+        assertEquals("Star Trek", eintrag.info().reihe());
     }
 
     private static String reihe(Map<String, String> reihen, String titel) {

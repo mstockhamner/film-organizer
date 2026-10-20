@@ -145,8 +145,7 @@ public final class Abgleich {
             if (info.aufloesung() == 0) {
                 // Von Hand abgelegt: Auflösung aus dem Dateinamen, falls sie dort steht.
                 int ausName = NamensErkennung.aufloesung(video.getFileName().toString().replace('.', ' '));
-                info = new FilmInfo(info.titel(), info.jahr(), ausName, info.staffel(), info.folge(), info.fassung(),
-                        info.reihe(), info.folgentitel());
+                info = info.mitAufloesungUndFassung(ausName, info.fassung());
             }
             ergebnis.add(new Fassung(sammlung.toAbsolutePath().normalize(), name, info, video.toAbsolutePath().normalize(),
                     groesse));
