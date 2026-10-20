@@ -93,12 +93,13 @@ public final class Ausfuehrung {
         String zeitstempel = LocalDateTime.now().format(ZEITSTEMPEL);
         Path protokoll = protokolle.resolve(zeitstempel + ".tsv");
         berichtSchreiben(plan, ziel.resolve(Katalog.VERWALTUNG).resolve(BERICHTE).resolve(zeitstempel + "-doubletten.txt"));
+        katalogSichern(ziel, protokoll);
         int filme = 0;
         try (BufferedWriter schreiber = Files.newBufferedWriter(protokoll, StandardCharsets.UTF_8,
                 StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
             for (Aktion aktion : plan) {
                 if (aktion.art() != Art.EINSORTIEREN && aktion.art() != Art.ERSETZEN && aktion.art() != Art.UMSORTIEREN
-                        && !aktion.inQuarantaene()) {
+                        && aktion.art() != Art.JAHR_ERGAENZEN && !aktion.inQuarantaene()) {
                     continue;
                 }
                 for (Verschiebung v : aktion.verschiebungen()) {
@@ -139,6 +140,25 @@ public final class Ausfuehrung {
                     ausgabe.println("in Quarantäne: " + ziel.relativize(video));
                     continue;
                 }
+                if (aktion.art() == Art.JAHR_ERGAENZEN || aktion.art() == Art.ERSETZEN) {
+                    // Einträge der verschobenen Dateien aus der Sammlung fallen weg (z.B. der alte ohne Jahr),
+                    // ihr leer gewordener Ordner auch.
+                    Path zielAbs = ziel.toAbsolutePath().normalize();
+                    for (Verschiebung v : aktion.verschiebungen()) {
+                        Path von = v.von().toAbsolutePath().normalize();
+                        if (von.startsWith(zielAbs)) {
+                            katalog.entfernen(zielAbs.relativize(von).toString());
+                            leerenOrdnerEntfernen(von.getParent(), zielAbs);
+                        }
+                    }
+                }
+                if (aktion.art() == Art.JAHR_ERGAENZEN) {
+                    katalog.hinzufuegen(new Katalog.Eintrag(aktion.film().info(), ziel.relativize(video).toString(),
+                            aktion.film().groesse()));
+                    katalog.speichern();
+                    ausgabe.println("Jahr ergänzt: " + ziel.relativize(video));
+                    continue;
+                }
                 // Beim Ersetzen fällt der alte Eintrag weg, weil Film und Fassung gleich sind.
                 katalog.hinzufuegen(new Katalog.Eintrag(aktion.film().info(), ziel.relativize(video).toString(),
                         aktion.film().groesse()));
@@ -148,6 +168,25 @@ public final class Ausfuehrung {
             }
         }
         return filme;
+    }
+
+    /**
+     * Sichert den Katalog vor einem Lauf neben dem Protokoll ({@code <Zeitstempel>.katalog}), damit Rückgängig
+     * ihn genau wiederherstellen kann. Gibt es noch keinen Katalog, ist die Sicherung leer.
+     */
+    static void katalogSichern(Path ziel, Path protokoll) throws IOException {
+        Path katalog = ziel.resolve(Katalog.VERWALTUNG).resolve(Katalog.DATEI);
+        Path sicherung = katalogSicherung(protokoll);
+        Files.createDirectories(sicherung.getParent());
+        if (Files.isRegularFile(katalog)) {
+            Files.copy(katalog, sicherung, StandardCopyOption.REPLACE_EXISTING);
+        } else {
+            Files.writeString(sicherung, "", StandardCharsets.UTF_8);
+        }
+    }
+
+    private static Path katalogSicherung(Path protokoll) {
+        return protokoll.resolveSibling(Dateinamen.ohneEndung(protokoll.getFileName().toString()) + ".katalog");
     }
 
     /** Listet Doubletten und andere Fassungen mit Entscheidung, Hinweis und Ziel auf. */
@@ -226,6 +265,13 @@ public final class Ausfuehrung {
             zurueck++;
         }
         katalog.speichern();
+        // Den Katalog genau so wiederherstellen, wie er vor dem Lauf war.
+        Path sicherung = katalogSicherung(letztes);
+        if (Files.isRegularFile(sicherung)) {
+            Files.copy(sicherung, ziel.resolve(Katalog.VERWALTUNG).resolve(Katalog.DATEI),
+                    StandardCopyOption.REPLACE_EXISTING);
+            Files.move(sicherung, sicherung.resolveSibling(sicherung.getFileName() + ERLEDIGT));
+        }
         Files.move(letztes, letztes.resolveSibling(letztes.getFileName() + ERLEDIGT));
         return zurueck;
     }

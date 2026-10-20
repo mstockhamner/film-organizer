@@ -172,7 +172,7 @@ class PlanTabelleTest {
         assertEquals("Keine Filme gefunden.", Fenster.zusammenfassung(List.of()));
         assertTrue(Fenster.zusammenfassung(List.of(new Aktion(Art.UNERKANNT, f, List.of(), "")))
                 .startsWith("0 werden einsortiert, 0 Doubletten (davon 0 in Quarantäne), "
-                        + "0 ersetzen vorhandene, 0 werden in Filmreihen umsortiert, 0 andere Fassungen zu entscheiden, 1 nicht erkannt, "
+                        + "0 ersetzen vorhandene, 0 Filme der Sammlung werden umsortiert oder umbenannt, 0 andere Fassungen zu entscheiden, 1 nicht erkannt, "
                         + "0 Konflikte, 0 ausgelassen."));
     }
 

@@ -280,7 +280,8 @@ public final class Vorschlaege {
         }
         for (Aktion aktion : Planer.planen(zuPlanen, katalog, ziel, entscheidungen, reihen)) {
             // Auch das Umsortieren eines Films aus der Sammlung lässt sich abwählen.
-            aktionen.add(aktion.art() == Art.UMSORTIEREN && ausgelassen.contains(aktion.film().video())
+            aktionen.add((aktion.art() == Art.UMSORTIEREN || aktion.art() == Art.JAHR_ERGAENZEN)
+                    && ausgelassen.contains(aktion.film().video())
                     ? new Aktion(Art.AUSGELASSEN, aktion.film(), List.of(), "abgewählt, bleibt an seinem Platz")
                     : aktion);
         }

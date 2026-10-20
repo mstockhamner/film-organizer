@@ -212,6 +212,7 @@ public final class Main {
                     + ", andere bleiben liegen)";
             case ERSETZEN -> "Bessere Fassungen, ersetzen die vorhandene (die alte kommt nach " + Planer.QUARANTAENE + ")";
             case UMSORTIEREN -> "Filme aus der Sammlung, die in den Ordner ihrer Filmreihe kommen";
+            case JAHR_ERGAENZEN -> "Filme der Sammlung ohne Jahr, deren Jahr jetzt bekannt ist (Ordner und Dateien bekommen es)";
             case FASSUNG -> "Andere Fassungen eines vorhandenen Films, Rückfrage beim Ausführen";
             case UNERKANNT -> "Nicht erkannt, bleiben liegen";
             case KONFLIKT -> "Konflikte, bleiben liegen";
@@ -232,7 +233,7 @@ public final class Main {
         }
         long anzahl = plan.stream().filter(a -> a.art() == Art.EINSORTIEREN).count();
         long ersetzt = plan.stream().filter(a -> a.art() == Art.ERSETZEN).count();
-        long umsortiert = plan.stream().filter(a -> a.art() == Art.UMSORTIEREN).count();
+        long umsortiert = plan.stream().filter(a -> a.art() == Art.UMSORTIEREN || a.art() == Art.JAHR_ERGAENZEN).count();
         long quarantaene = plan.stream().filter(Aktion::inQuarantaene).count();
         if (anzahl == 0 && ersetzt == 0 && umsortiert == 0 && quarantaene == 0) {
             aus.println("Nichts einzusortieren.");

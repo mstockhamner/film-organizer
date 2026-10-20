@@ -54,6 +54,9 @@ public final class Planer {
     private Map<String, String> erkannteReihen = Map.of();
     /** In diesem Lauf zum Einsortieren vorgesehene Filme, damit weitere Fassungen sie als vorhanden sehen. */
     private final List<Katalog.Eintrag> eingeplant = new ArrayList<>();
+    /** Vorschläge, Filmen der Sammlung ohne Jahr das Jahr einer neuen Fassung zu geben. */
+    private final List<Aktion> jahrErgaenzen = new ArrayList<>();
+    private final Set<Path> jahrErgaenzt = new HashSet<>();
 
     /** Gemerkte, von Hand festgelegte Filmreihen aus früheren Läufen. */
     private final Reihenzuordnung gemerkt;
@@ -148,6 +151,8 @@ public final class Planer {
             }
             aktionen.add(aktion);
         }
+        // Filme der Sammlung ohne Jahr, deren Jahr eine neue Fassung verrät.
+        aktionen.addAll(jahrErgaenzen);
 
         // 4. Filme aus der Sammlung, die jetzt zu einer Filmreihe gehören, in deren Ordner umsortieren.
         aktionen.addAll(umsortieren(aktionen));
@@ -294,24 +299,94 @@ public final class Planer {
     }
 
 
+    /** Filme der Sammlung mit demselben Titel, bei denen genau eine Seite kein Jahr hat. */
+    private List<Katalog.Eintrag> ohneJahrGleich(FilmInfo info) {
+        String titel = FilmInfo.normalisieren(info.titel());
+        return katalog.eintraege().stream()
+                .filter(e -> !e.info().istFolge() && FilmInfo.normalisieren(e.info().titel()).equals(titel))
+                .filter(e -> (e.info().jahr() == 0) != (info.jahr() == 0))
+                .toList();
+    }
+
+    /**
+     * Liegt ein Film ohne Jahr in der Sammlung und bringt eine neue Fassung das Jahr mit, wird vorgeschlagen,
+     * Ordner und Dateien umzubenennen: {@code Der Pate/Der Pate.mkv} wird {@code Der Pate (1972)/Der Pate (1972).mkv}.
+     * Nur wenn der Film allein in seinem Ordner liegt, der Ordner nach dem Schema heißt und der neue frei ist.
+     */
+    private void jahrErgaenzenVorschlagen(Katalog.Eintrag vorhanden, int jahr) throws IOException {
+        if (jahr == 0 || vorhanden.info().jahr() != 0 || vorhanden.info().istFolge()) {
+            return;
+        }
+        Path alt = katalog.eintraege().contains(vorhanden) ? alteDatei(vorhanden) : null;
+        if (alt == null) {
+            return;
+        }
+        Path ordner = alt.getParent();
+        if (!ordner.equals(vorhanden.info().zielOrdner(ziel)) || !jahrErgaenzt.add(ordner)) {
+            return;
+        }
+        long videos;
+        try (Stream<Path> inhalt = Files.list(ordner)) {
+            videos = inhalt.filter(p -> Dateinamen.istVideo(p.getFileName().toString())).count();
+        }
+        if (videos != 1) {
+            return;
+        }
+        FilmInfo mitJahr = vorhanden.info().mitTitelUndJahr(vorhanden.info().titel(), jahr);
+        Film film = new Film(alt, Files.size(alt), mitJahr, List.of());
+        Path neuerOrdner = mitJahr.zielOrdner(ziel);
+        if (Files.exists(neuerOrdner)) {
+            jahrErgaenzen.add(new Aktion(Art.KONFLIKT, film, List.of(), "Jahr ergänzen nicht möglich, existiert schon: "
+                    + neuerOrdner));
+            return;
+        }
+        String alterName = vorhanden.info().zielName();
+        String neuerName = mitJahr.zielName();
+        List<Verschiebung> verschiebungen = new ArrayList<>();
+        try (Stream<Path> dateien = Files.walk(ordner)) {
+            for (Path datei : dateien.filter(Files::isRegularFile).sorted().toList()) {
+                String name = datei.getFileName().toString();
+                String neu = name.startsWith(alterName + ".") || name.startsWith(alterName + " - ")
+                        ? neuerName + name.substring(alterName.length()) : name;
+                verschiebungen.add(new Verschiebung(datei, neuerOrdner.resolve(ordner.relativize(datei)).resolveSibling(neu)));
+            }
+        }
+        jahrErgaenzen.add(new Aktion(Art.JAHR_ERGAENZEN, film, verschiebungen,
+                "Jahr ergänzen: " + alterName + " wird " + neuerName));
+    }
+
     private Aktion gegenSammlung(Film neuerFilm) throws IOException {
         List<Katalog.Eintrag> fassungen = new ArrayList<>(katalog.alle(neuerFilm.info().schluessel()));
         eingeplant.stream().filter(e -> e.info().schluessel().equals(neuerFilm.info().schluessel()))
                 .forEach(fassungen::add);
+        if (fassungen.isEmpty() && !neuerFilm.info().istFolge()) {
+            // Derselbe Titel, aber nur auf einer Seite mit Jahr: derselbe Film.
+            fassungen.addAll(ohneJahrGleich(neuerFilm.info()));
+        }
         // Weitere Fassungen und Ersatz kommen in den Ordner, in dem der Film schon liegt.
-        Film film = fassungen.isEmpty() || neuerFilm.info().istFolge() ? neuerFilm
+        Film mitOrdner = fassungen.isEmpty() || neuerFilm.info().istFolge() ? neuerFilm
                 : neuerFilm.mitInfo(neuerFilm.info().mitReihe(fassungen.get(0).info().reihe())
                         .mitNummer(fassungen.get(0).info().nummer()));
+        // Kennt nur die Sammlung das Jahr, übernimmt die neue Fassung es.
+        Film film = mitOrdner.info().jahr() == 0 && !fassungen.isEmpty() && fassungen.get(0).info().jahr() > 0
+                && !mitOrdner.info().istFolge()
+                ? mitOrdner.mitInfo(mitOrdner.info().mitTitelUndJahr(mitOrdner.info().titel(), fassungen.get(0).info().jahr()))
+                : mitOrdner;
         Katalog.Eintrag vorhanden = fassungen.stream()
-                .filter(e -> e.info().fassungsSchluessel().equals(film.info().fassungsSchluessel()))
+                .filter(e -> FilmInfo.normalisieren(e.info().fassung()).equals(FilmInfo.normalisieren(film.info().fassung()))
+                        && (e.info().istFolge() == film.info().istFolge()))
+                .filter(e -> e.info().schluessel().equals(film.info().schluessel()) || e.info().jahr() == 0
+                        || film.info().jahr() == 0)
                 .findFirst().orElse(null);
         if (vorhanden != null) {
             if (identisch(film, vorhanden)) {
-                return doublette(film, "identische Datei schon in der Sammlung: " + vorhanden.video(),
+                Aktion aktion = doublette(film, "identische Datei schon in der Sammlung: " + vorhanden.video(),
                         Entscheidung.QUARANTAENE, null);
+                jahrErgaenzenVorschlagen(vorhanden, film.info().jahr());
+                return aktion;
             }
             // Ersetzen geht nur, wenn die vorhandene Videodatei eindeutig feststeht.
-            Path alt = katalog.alle(film.info().schluessel()).contains(vorhanden) ? alteDatei(vorhanden) : null;
+            Path alt = katalog.eintraege().contains(vorhanden) ? alteDatei(vorhanden) : null;
             // Von Hand abgelegte Filme stehen ohne Größe im Katalog, dann zählt die Datei selbst.
             long altGroesse = vorhanden.groesse() > 0 ? vorhanden.groesse() : alt != null ? Files.size(alt) : 0;
             int neuAufl = film.info().aufloesung();
@@ -323,7 +398,11 @@ public final class Planer {
             Entscheidung vorschlag = vergleich < 0 ? Entscheidung.QUARANTAENE
                     : vergleich > 0 && alt != null ? Entscheidung.ERSETZEN
                     : Entscheidung.LIEGEN_LASSEN;
-            return doublette(film, hinweis, vorschlag, alt == null ? null : new Ersatz(alt, fassungen.size() > 1));
+            Aktion aktion = doublette(film, hinweis, vorschlag, alt == null ? null : new Ersatz(alt, fassungen.size() > 1));
+            if (aktion.art() != Art.ERSETZEN) {
+                jahrErgaenzenVorschlagen(vorhanden, film.info().jahr());
+            }
+            return aktion;
         }
         for (Katalog.Eintrag eintrag : katalog.eintraege()) {
             if (identisch(film, eintrag)) {
@@ -362,7 +441,7 @@ public final class Planer {
      * Doublette mit Vorschlag. Möglich sind Quarantäne und Liegenlassen, Ersetzen nur gegenüber einer
      * vorhandenen Fassung in der Sammlung ({@code ersatz}).
      */
-    private Aktion doublette(Film film, String hinweis, Entscheidung vorschlag, Ersatz ersatz) {
+    private Aktion doublette(Film film, String hinweis, Entscheidung vorschlag, Ersatz ersatz) throws IOException {
         List<Entscheidung> auswahl = ersatz == null
                 ? List.of(Entscheidung.QUARANTAENE, Entscheidung.LIEGEN_LASSEN)
                 : List.of(Entscheidung.ERSETZEN, Entscheidung.QUARANTAENE, Entscheidung.LIEGEN_LASSEN);
@@ -386,7 +465,7 @@ public final class Planer {
      * Dateien, die von den neuen Namen belegt sind (z.B. {@code poster.jpg}), in die Quarantäne, dann
      * wird die neue Fassung einsortiert. Andere Dateien im Ordner bleiben, wo sie sind.
      */
-    private Aktion ersetzen(Film film, Ersatz ersatz, String hinweis) {
+    private Aktion ersetzen(Film film, Ersatz ersatz, String hinweis) throws IOException {
         List<Verschiebung> neu = zielVerschiebungen(film, ersatz.teiltOrdner() || film.info().istFolge());
         List<NeueDatei> neueDateien = nfo(film, neu);
         Set<Path> weg = new LinkedHashSet<>();
@@ -398,6 +477,17 @@ public final class Planer {
         }
         // Eine .nfo der alten Fassung wird durch die neue ersetzt.
         neueDateien.stream().map(NeueDatei::pfad).filter(Files::isRegularFile).forEach(weg::add);
+        // Kommt die neue Fassung in einen anderen Ordner (z.B. jetzt mit Jahr) und lag die alte dort allein,
+        // gehen auch ihre Begleitdateien mit in die Quarantäne; der alte Ordner bleibt nicht halb leer zurück.
+        Path alterOrdner = ersatz.video().getParent();
+        if (!neu.isEmpty() && !alterOrdner.equals(neu.get(0).nach().getParent()) && !ersatz.teiltOrdner()) {
+            try (Stream<Path> inhalt = Files.walk(alterOrdner)) {
+                List<Path> dateien = inhalt.filter(Files::isRegularFile).sorted().toList();
+                if (dateien.stream().filter(p -> Dateinamen.istVideo(p.getFileName().toString())).count() == 1) {
+                    weg.addAll(dateien);
+                }
+            }
+        }
         List<Verschiebung> verschiebungen = new ArrayList<>();
         for (Path datei : weg) {
             Path nach = inQuarantaene(datei);

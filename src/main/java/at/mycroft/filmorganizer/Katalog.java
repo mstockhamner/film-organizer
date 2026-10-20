@@ -24,7 +24,7 @@ import java.util.stream.Stream;
 public final class Katalog {
 
     static final String VERWALTUNG = ".filmorganizer";
-    private static final String DATEI = "katalog.tsv";
+    static final String DATEI = "katalog.tsv";
     private static final Pattern ZIELORDNER = Pattern.compile("^(.+) \\((\\d{4})\\)$");
     /** Ordner im Ziel, die weder Film noch Filmreihe sind (in Kleinbuchstaben). */
     private static final Set<String> SONDERORDNER = Set.of(FilmInfo.SERIEN.toLowerCase(Locale.ROOT),

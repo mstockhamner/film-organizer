@@ -327,7 +327,9 @@ public final class Abgleich {
                 if (protokoll == null) {
                     Path ordner = weg.sammlung().resolve(Katalog.VERWALTUNG).resolve(Ausfuehrung.PROTOKOLLE);
                     Files.createDirectories(ordner);
-                    protokoll = Files.newBufferedWriter(ordner.resolve(zeitstempel + ABGLEICH + ".tsv"),
+                    Path datei = ordner.resolve(zeitstempel + ABGLEICH + ".tsv");
+                    Ausfuehrung.katalogSichern(weg.sammlung(), datei);
+                    protokoll = Files.newBufferedWriter(datei,
                             StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
                     protokolle.put(weg.sammlung(), protokoll);
                 }
