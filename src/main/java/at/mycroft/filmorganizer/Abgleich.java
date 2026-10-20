@@ -9,10 +9,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -301,6 +303,7 @@ public final class Abgleich {
             }
         }
         String zeitstempel = LocalDateTime.now().format(Ausfuehrung.ZEITSTEMPEL);
+        berichtSchreiben(funde, gewaehlt, zeitstempel);
         Map<Path, BufferedWriter> protokolle = new HashMap<>();
         Map<Path, Katalog> kataloge = new HashMap<>();
         Set<Path> erledigt = new HashSet<>();
@@ -354,6 +357,52 @@ public final class Abgleich {
             }
         }
         return anzahl;
+    }
+
+    /**
+     * Schreibt den Doublettenbericht des Abgleichs in jede beteiligte Sammlung:
+     * {@code .filmorganizer/berichte/<Zeitstempel>-abgleich.txt} mit allen Funden, Entscheidung, Vergleich und
+     * den Verschiebungen.
+     */
+    static void berichtSchreiben(List<Fund> funde, Map<String, Wahl> gewaehlt, String zeitstempel) throws IOException {
+        if (funde.isEmpty()) {
+            return;
+        }
+        Fund erster = funde.get(0);
+        Set<Path> sammlungen = new LinkedHashSet<>();
+        funde.forEach(f -> {
+            sammlungen.add(f.erste().sammlung());
+            sammlungen.add(f.zweite().sammlung());
+        });
+        List<String> zeilen = new ArrayList<>();
+        zeilen.add("Abgleich vom " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")));
+        zeilen.add("A: " + erster.erste().sammlung());
+        sammlungen.stream().filter(s -> !s.equals(erster.erste().sammlung())).forEach(s -> zeilen.add("B: " + s));
+        for (Art art : Art.values()) {
+            List<Fund> mitArt = funde.stream().filter(f -> f.art() == art).toList();
+            if (mitArt.isEmpty()) {
+                continue;
+            }
+            zeilen.add("");
+            zeilen.add(art.text() + " (" + mitArt.size() + ")");
+            for (Fund f : mitArt) {
+                Wahl wahl = wahl(f, gewaehlt);
+                zeilen.add("  " + wahl.text() + (wahl == f.vorschlag() ? "" : " (Vorschlag: " + f.vorschlag().text() + ")")
+                        + ": " + f.erste().info().titel());
+                zeilen.add("      1 " + f.erste().anzeige());
+                zeilen.add("      2 " + f.zweite().anzeige());
+                zeilen.add("      " + f.hinweis());
+                for (Verschiebung v : verschiebungen(f, wahl)) {
+                    zeilen.add("      " + v.von() + " -> " + v.nach());
+                }
+            }
+        }
+        for (Path sammlung : sammlungen) {
+            Path datei = sammlung.resolve(Katalog.VERWALTUNG).resolve(Ausfuehrung.BERICHTE)
+                    .resolve(zeitstempel + ABGLEICH + ".txt");
+            Files.createDirectories(datei.getParent());
+            Files.write(datei, zeilen, StandardCharsets.UTF_8);
+        }
     }
 
     /**

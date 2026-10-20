@@ -133,6 +133,20 @@ class AbgleichTest {
         assertTrue(Abgleich.abgleichen(a, b, false).stream()
                 .allMatch(f -> f.art() == Art.FASSUNG), Abgleich.abgleichen(a, b, false).toString());
 
+        // Bericht in beiden Sammlungen.
+        for (Path sammlung : List.of(a, b)) {
+            Path berichte = sammlung.resolve(".filmorganizer/berichte");
+            List<Path> dateien;
+            try (var s = Files.list(berichte)) {
+                dateien = s.filter(p -> p.getFileName().toString().endsWith("-abgleich.txt")).toList();
+            }
+            assertEquals(1, dateien.size());
+            String bericht = Files.readString(dateien.get(0));
+            assertTrue(bericht.contains("Doublette (2)"));
+            assertTrue(bericht.contains("2 behalten (Vorschlag: bitte wählen): Unklar"));
+            assertTrue(bericht.contains("_Doubletten"));
+        }
+
         assertTrue(Abgleich.rueckgaengig(a, b, still) > 0);
         assertTrue(Files.exists(paterB));
         assertTrue(Files.exists(dschungelA));
