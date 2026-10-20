@@ -134,9 +134,31 @@ public final class Vorschlaege {
         merken();
     }
 
-    /** Setzt Titel und Jahr eines Films von Hand. */
+    /**
+     * Setzt Titel und Jahr eines Films von Hand. Ein eingetragenes Jahr gilt auch für alle anderen
+     * eingelesenen Dateien mit demselben Titel, denen das Jahr noch fehlt (z.B. dieselbe Aufnahme als .m4v und
+     * .mkv), damit es nur einmal eingetragen werden muss.
+     */
     public void korrigieren(Path video, String titel, int jahr) {
-        korrekturen.put(video, new Korrektur(titel == null ? "" : titel.trim(), jahr));
+        String neuerTitel = titel == null ? "" : titel.trim();
+        korrekturen.put(video, new Korrektur(neuerTitel, jahr));
+        if (jahr > 0 && !neuerTitel.isEmpty()) {
+            Film geaendert = gescannt.stream().filter(f -> f.video().equals(video)).findFirst().orElse(null);
+            for (Film f : gescannt) {
+                if (f.video().equals(video) || korrekturen.containsKey(f.video()) || f.info() == null
+                        || f.info().jahr() > 0 || f.info().istFolge()) {
+                    continue;
+                }
+                boolean gleicherTitel = FilmInfo.normalisieren(f.info().titel()).equals(FilmInfo.normalisieren(neuerTitel))
+                        || geaendert != null && geaendert.info() != null
+                        && FilmInfo.normalisieren(f.info().titel()).equals(FilmInfo.normalisieren(geaendert.info().titel()));
+                boolean gleicheReihe = geaendert == null || geaendert.info() == null
+                        || FilmInfo.normalisieren(f.info().reihe()).equals(FilmInfo.normalisieren(geaendert.info().reihe()));
+                if (gleicherTitel && gleicheReihe) {
+                    korrekturen.put(f.video(), new Korrektur(neuerTitel, jahr));
+                }
+            }
+        }
         merken();
     }
 

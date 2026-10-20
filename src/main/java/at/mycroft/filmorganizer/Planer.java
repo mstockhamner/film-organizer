@@ -165,7 +165,37 @@ public final class Planer {
             }
         }
         reihen.replaceAll((t, r) -> vorhandeneNamen.getOrDefault(FilmInfo.normalisieren(r), r));
+
+        // Bekannte Reihen (aus nummerierten Namen wie "Star Trek 04 - …" oder aus der Sammlung): Filme, deren
+        // Titel mit dem Reihennamen als ganzen Wörtern beginnt ("Star Trek Beyond"), gehören dazu.
+        Set<String> bekannte = new LinkedHashSet<>();
+        filme.stream().filter(f -> f.info() != null && !f.info().reihe().isEmpty()).forEach(f -> bekannte.add(f.info().reihe()));
+        sammlung.stream().filter(e -> !e.info().reihe().isEmpty()).forEach(e -> bekannte.add(e.info().reihe()));
+        for (String t : titel) {
+            String schluessel = FilmInfo.normalisieren(t);
+            if (!reihen.containsKey(schluessel)) {
+                bekannte.stream().filter(r -> beginntMitWoertern(t, r)).findFirst().ifPresent(r -> reihen.put(schluessel, r));
+            }
+        }
         return reihen;
+    }
+
+    /** Ob {@code titel} mit allen Wörtern von {@code anfang} beginnt und danach weitergeht. */
+    static boolean beginntMitWoertern(String titel, String anfang) {
+        List<String> t = woerter(titel);
+        List<String> a = woerter(anfang);
+        return !a.isEmpty() && t.size() > a.size() && t.subList(0, a.size()).equals(a);
+    }
+
+    private static List<String> woerter(String text) {
+        List<String> woerter = new ArrayList<>();
+        for (String wort : text.split("[\\s\\-–:]+")) {
+            String n = FilmInfo.normalisieren(wort);
+            if (!n.isEmpty()) {
+                woerter.add(n);
+            }
+        }
+        return woerter;
     }
 
     /**

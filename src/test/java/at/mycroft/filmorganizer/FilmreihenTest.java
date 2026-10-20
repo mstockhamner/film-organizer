@@ -189,6 +189,36 @@ class FilmreihenTest {
     }
 
     @Test
+    void jahrGiltFuerAlleDateienMitGleichemTitel() throws IOException {
+        Path klein = datei("Star Trek 04 - Zurück in die Gegenwart.m4v", "klein");
+        Path gross = datei("Star Trek 04 - Zurück in die Gegenwart.mkv", "die große Fassung des Films");
+        Path anderer = datei("Star Trek 05 - Am Rande des Universum.mkv", "fünf");
+        Vorschlaege v = Vorschlaege.einlesen(quelle, ziel());
+
+        v.korrigieren(gross, "Zurück in die Gegenwart", 1986);
+        List<Aktion> plan = v.plan();
+        assertEquals(1986, v.jahr(aktion(plan, klein).film()), "auch für die .m4v übernommen");
+        assertEquals(0, v.jahr(aktion(plan, anderer).film()), "anderer Titel bleibt offen");
+        assertEquals(ziel().resolve("Star Trek/04 - Zurück in die Gegenwart (1986)/Zurück in die Gegenwart (1986).mkv"),
+                aktion(plan, gross).verschiebungen().get(0).nach());
+        assertTrue(aktion(plan, klein).inQuarantaene(), "kleinere Datei derselben Fassung ist eine Doublette");
+    }
+
+    @Test
+    void filmMitReihennamenAmAnfangKommtInDieBekannteReihe() throws IOException {
+        datei("Star Trek 10 - Nemesis (2002).mkv", "nemesis");
+        Path beyond = datei("Star.Trek.Beyond.2016.German.1080p.BluRay/beyond.mkv", "beyond");
+        Path trekkies = datei("Star.Trekkies.1997.German/trekkies.mkv", "trekkies");
+        List<Aktion> plan = Main.planErstellen(quelle, ziel());
+        assertEquals(ziel().resolve("Star Trek/Star Trek Beyond (2016)/Star Trek Beyond (2016).mkv"),
+                aktion(plan, beyond).verschiebungen().get(0).nach());
+        assertEquals(ziel().resolve("Star Trekkies (1997)/Star Trekkies (1997).mkv"),
+                aktion(plan, trekkies).verschiebungen().get(0).nach(), "nur ganze Wörter");
+        assertTrue(Planer.beginntMitWoertern("Star Trek-Into Darkness", "Star Trek"));
+        assertFalse(Planer.beginntMitWoertern("Star Trek", "Star Trek"));
+    }
+
+    @Test
     void vonHandAbgelegterNummerierterReihenfilm() throws IOException {
         Path hand = ziel().resolve("Star Trek/04 - Zurück in die Gegenwart (1986)/st4.mkv");
         Files.createDirectories(hand.getParent());
