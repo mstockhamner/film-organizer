@@ -123,6 +123,37 @@ class FilmreihenTest {
         assertEquals(ziel().resolve("Mafia/Der Pate (1972)"), aktion(v.plan(), pate).verschiebungen().get(0).nach().getParent());
     }
 
+    @Test
+    void reiheNummerUndTitelImNamen() {
+        assertEquals(new FilmInfo("Zurück in die Gegenwart", 0, 0, 0, 0, "", "Star Trek"),
+                NamensErkennung.erkennenReihenfilm("Star Trek - 04 - Zurück in die Gegenwart").orElseThrow());
+        assertEquals(new FilmInfo("Zurück in die Gegenwart", 1986, 1080, 0, 0, "", "Star Trek"),
+                NamensErkennung.erkennenReihenfilm("Star.Trek.-.04.-.Zurück.in.die.Gegenwart.(1986).1080p").orElseThrow());
+        assertEquals(new FilmInfo("Das unentdeckte Land", 1991, 0, 0, 0, "", "Star Trek"),
+                NamensErkennung.erkennen("Star Trek - 6 - Das unentdeckte Land 1991").orElseThrow());
+        assertTrue(NamensErkennung.erkennen("Star Trek - 04 - Zurück in die Gegenwart").isEmpty(), "ohne Jahr");
+        assertTrue(NamensErkennung.erkennenReihenfilm("Gregs Tagebuch 2 - Gibt's Probleme").isEmpty());
+        assertTrue(NamensErkennung.erkennenReihenfilm("Kevin - Allein zu Haus").isEmpty());
+    }
+
+    @Test
+    void reihenfilmOhneJahrWirdVorgeschlagenUndNachgetragen() throws IOException {
+        Path ohneJahr = datei("Star Trek/Star Trek - 04 - Zurück in die Gegenwart.mkv", "st4");
+        Path ordner = datei("Star Trek - 06 - Das unentdeckte Land (1991)/st6.mkv", "st6");
+        Vorschlaege v = Vorschlaege.einlesen(quelle, ziel());
+
+        Aktion st4 = aktion(v.plan(), ohneJahr);
+        assertEquals(Art.UNERKANNT, st4.art());
+        assertEquals("Zurück in die Gegenwart", v.titel(st4.film()));
+        assertEquals("Star Trek", st4.film().info().reihe());
+        assertEquals(ziel().resolve("Star Trek/Das unentdeckte Land (1991)/Das unentdeckte Land (1991).mkv"),
+                aktion(v.plan(), ordner).verschiebungen().get(0).nach());
+
+        v.korrigieren(ohneJahr, "Zurück in die Gegenwart", 1986);
+        assertEquals(ziel().resolve("Star Trek/Zurück in die Gegenwart (1986)/Zurück in die Gegenwart (1986).mkv"),
+                aktion(v.plan(), ohneJahr).verschiebungen().get(0).nach());
+    }
+
     private static String reihe(Map<String, String> reihen, String titel) {
         return reihen.get(FilmInfo.normalisieren(titel));
     }

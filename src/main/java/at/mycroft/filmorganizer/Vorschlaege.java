@@ -358,10 +358,11 @@ public final class Vorschlaege {
         if (!k.titel().isEmpty() && (k.jahr() > 0 || folge)) {
             int aufloesung = film.info() != null ? film.info().aufloesung()
                     : NamensErkennung.aufloesung(film.video().getFileName().toString().replace('.', ' '));
-            info = folge
+            // Mit vorhandener Erkennung bleiben Auflösung, Fassung, Reihe und Folge erhalten.
+            info = film.info() != null
                     ? film.info().mitTitelUndJahr(k.titel(), k.jahr())
-                    : new FilmInfo(k.titel(), k.jahr(), aufloesung, 0, 0, film.info() != null ? film.info().fassung()
-                            : NamensErkennung.fassung(Dateinamen.ohneEndung(film.video().getFileName().toString())));
+                    : new FilmInfo(k.titel(), k.jahr(), aufloesung, 0, 0,
+                            NamensErkennung.fassung(Dateinamen.ohneEndung(film.video().getFileName().toString())));
         }
         return new Film(film.video(), film.groesse(), info, film.begleitdateien());
     }

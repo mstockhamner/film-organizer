@@ -168,13 +168,20 @@ public final class Planer {
         return reihen;
     }
 
-    /** Von Hand gesetzte Reihe (in der Vorschau oder gemerkt), sonst die erkannte; bei Serienfolgen keine. */
+    /**
+     * Von Hand gesetzte Reihe (in der Vorschau oder gemerkt), sonst die aus dem Namen
+     * ({@code Star Trek - 04 - …}), sonst die erkannte; bei Serienfolgen keine.
+     */
     private String reiheFuer(Path video, FilmInfo info) {
         if (info.istFolge()) {
             return "";
         }
         String vonHand = vonHand(video, info);
-        return vonHand != null ? vonHand : erkannteReihen.getOrDefault(FilmInfo.normalisieren(info.titel()), "");
+        if (vonHand != null) {
+            return vonHand;
+        }
+        return !info.reihe().isEmpty() ? info.reihe()
+                : erkannteReihen.getOrDefault(FilmInfo.normalisieren(info.titel()), "");
     }
 
     /** In der Vorschau gesetzte Reihe, sonst die gemerkte; {@code null}, wenn nichts von Hand festgelegt ist. */

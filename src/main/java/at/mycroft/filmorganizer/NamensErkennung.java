@@ -29,6 +29,9 @@ public final class NamensErkennung {
     /** Aufnahme eines Sat-Receivers: Datum, Uhrzeit, Sender, Titel, z.B. {@code 20200612 2226 - ATV HD - Titel}. */
     private static final Pattern AUFNAHME = Pattern.compile(
             "^((?:19|20)[0-9]{2})([0-9]{2})([0-9]{2}) ([0-9]{4}) - (.+?) - (.+)$");
+    /** Film einer Reihe mit Nummer: {@code Star Trek - 04 - Zurück in die Gegenwart}. */
+    private static final Pattern REIHENFILM = Pattern.compile("^(.+?) - ([0-9]{1,2}) - (.+)$");
+
     /** Teil einer gestückelten Aufnahme wie {@code …_001}. */
     private static final Pattern TEIL = Pattern.compile("_[0-9]{3}$");
 
@@ -63,6 +66,10 @@ public final class NamensErkennung {
      * Zielschema {@code Titel (Jahr)} das Jahr braucht.
      */
     public static Optional<FilmInfo> erkennen(String name) {
+        Optional<FilmInfo> reihenfilm = erkennenReihenfilm(name);
+        if (reihenfilm.isPresent()) {
+            return reihenfilm.filter(info -> info.jahr() > 0);
+        }
         String text = vereinfachen(name);
         int aufloesung = aufloesung(text);
 
@@ -95,6 +102,35 @@ public final class NamensErkennung {
             return Optional.empty();
         }
         return Optional.of(new FilmInfo(titel, Integer.parseInt(jahr.group(1)), aufloesung, 0, 0, fassung(text)));
+    }
+
+    /**
+     * Erkennt einen Film einer Reihe nach dem Schema {@code Reihe - Nummer - Titel}, z.B.
+     * {@code Star Trek - 04 - Zurück in die Gegenwart}: Titel "Zurück in die Gegenwart" in der Filmreihe
+     * "Star Trek". Ein Jahr am Ende ({@code (1986)} oder {@code 1986}) wird übernommen, sonst ist es 0 und
+     * wird in der Vorschau nachgetragen. Technik-Angaben wie {@code 1080p} werden abgeschnitten.
+     */
+    public static Optional<FilmInfo> erkennenReihenfilm(String name) {
+        String text = vereinfachen(name);
+        Matcher m = REIHENFILM.matcher(text);
+        if (!m.matches()) {
+            return Optional.empty();
+        }
+        String reihe = aufraeumen(m.group(1));
+        String rest = m.group(3);
+        Matcher aufl = AUFLOESUNG.matcher(rest);
+        String kopf = aufl.find() ? rest.substring(0, aufl.start()) : rest;
+        String titel = aufraeumen(bisZurTechnik(kopf));
+        int jahr = 0;
+        Matcher mitJahr = TITEL_JAHR.matcher(titel);
+        if (mitJahr.matches() && Integer.parseInt(mitJahr.group(2)) <= Year.now().getValue() + 1) {
+            titel = aufraeumen(mitJahr.group(1));
+            jahr = Integer.parseInt(mitJahr.group(2));
+        }
+        if (reihe.isEmpty() || titel.isEmpty() || reihe.matches("[0-9 ]+")) {
+            return Optional.empty();
+        }
+        return Optional.of(new FilmInfo(titel, jahr, aufloesung(text), 0, 0, fassung(text), reihe));
     }
 
     /**

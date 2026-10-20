@@ -142,9 +142,25 @@ public final class Scanner {
         }
         FilmInfo ausDatei = NamensErkennung.erkennen(Dateinamen.ohneEndung(name(video))).orElse(null);
         if (ausDatei == null) {
+            ausDatei = reihenfilmOhneJahr(video, quelle);
+        }
+        if (ausDatei == null) {
             LOG.fine(() -> "Titel und Jahr nicht erkannt: " + video);
         }
         return ausDatei;
+    }
+
+    /**
+     * Film einer Reihe ohne Jahr ({@code Star Trek - 04 - Zurück in die Gegenwart}) im Datei- oder einem
+     * Ordnernamen: Titel und Reihe sind bekannt, das Jahr wird in der Vorschau nachgetragen.
+     */
+    private static FilmInfo reihenfilmOhneJahr(Path video, Path quelle) {
+        Optional<FilmInfo> info = NamensErkennung.erkennenReihenfilm(Dateinamen.ohneEndung(name(video)));
+        for (Path ordner = video.getParent(); info.isEmpty() && ordner != null && ordner.startsWith(quelle)
+                && ordner.getFileName() != null && !ordner.equals(quelle); ordner = ordner.getParent()) {
+            info = NamensErkennung.erkennenReihenfilm(ordner.getFileName().toString());
+        }
+        return info.map(i -> mitAufloesungAusDatei(i, video)).orElse(null);
     }
 
     /**
@@ -230,7 +246,7 @@ public final class Scanner {
         int aufloesung = info.aufloesung() != 0 ? info.aufloesung()
                 : NamensErkennung.aufloesung(datei.replace('.', ' '));
         String fassung = !info.fassung().isEmpty() ? info.fassung() : NamensErkennung.fassung(Dateinamen.ohneEndung(datei));
-        return new FilmInfo(info.titel(), info.jahr(), aufloesung, 0, 0, fassung);
+        return new FilmInfo(info.titel(), info.jahr(), aufloesung, 0, 0, fassung, info.reihe());
     }
 
     /**
