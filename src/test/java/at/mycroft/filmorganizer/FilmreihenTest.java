@@ -161,10 +161,13 @@ class FilmreihenTest {
         Path ordner = datei("Star Trek - 06 - Das unentdeckte Land (1991)/st6.mkv", "st6");
         Vorschlaege v = Vorschlaege.einlesen(quelle, ziel());
 
+        // Ohne Jahr: einsortiert ohne "(Jahr)" im Ordner- und Dateinamen.
         Aktion st4 = aktion(v.plan(), ohneJahr);
-        assertEquals(Art.UNERKANNT, st4.art());
+        assertEquals(Art.EINSORTIEREN, st4.art());
         assertEquals("Zurück in die Gegenwart", v.titel(st4.film()));
         assertEquals("Star Trek", st4.film().info().reihe());
+        assertEquals(ziel().resolve("Star Trek/04 - Zurück in die Gegenwart/Zurück in die Gegenwart.mkv"),
+                st4.verschiebungen().get(0).nach());
         assertEquals(ziel().resolve("Star Trek/06 - Das unentdeckte Land (1991)/Das unentdeckte Land (1991).mkv"),
                 aktion(v.plan(), ordner).verschiebungen().get(0).nach());
 

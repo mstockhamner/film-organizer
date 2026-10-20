@@ -377,7 +377,7 @@ public final class Vorschlaege {
         // Bei Serienfolgen bleiben Staffel und Folge erhalten, das Jahr ist dort nicht nötig.
         boolean folge = film.info() != null && film.info().istFolge();
         FilmInfo info = null;
-        if (!k.titel().isEmpty() && (k.jahr() > 0 || folge)) {
+        if (!k.titel().isEmpty()) {
             int aufloesung = film.info() != null ? film.info().aufloesung()
                     : NamensErkennung.aufloesung(film.video().getFileName().toString().replace('.', ' '));
             // Mit vorhandener Erkennung bleiben Auflösung, Fassung, Reihe und Folge erhalten.

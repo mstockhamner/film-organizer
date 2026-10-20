@@ -14,13 +14,11 @@ import java.util.List;
  */
 public record Film(Path video, long groesse, FilmInfo info, List<Path> begleitdateien) {
 
-    /** Vollständig erkannt: Titel und Jahr, bei Serienfolgen Titel, Staffel und Folge. */
+    /**
+     * Erkannt: ein Titel ist bekannt (bei Serienfolgen dazu Staffel und Folge). Das Jahr ist keine Pflicht;
+     * fehlt es, fehlt es auch im Ordner- und Dateinamen.
+     */
     public boolean erkannt() {
-        return info != null && (info.istFolge() || info.jahr() > 0);
-    }
-
-    /** Wenigstens ein Titel ist bekannt, auch wenn das Jahr noch fehlt. */
-    public boolean mitTitel() {
         return info != null && !info.titel().isEmpty();
     }
 }

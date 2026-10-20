@@ -80,15 +80,17 @@ class ArbeitsstandTest {
     @Test
     void nachDemEinsortierenBleibtNurDasUnerledigte() throws IOException {
         Vorschlaege v = Vorschlaege.einlesen(quelle, ziel, speicher);
-        v.korrigieren(unbekannt, "Der Pate 2", 0);
+        v.korrigieren(unbekannt, "", 0); // noch ohne Titel: bleibt liegen
         v.korrigieren(showman, "The Greatest Showman", 2017);
+        v.auslassen(pate, true);
         List<Aktion> plan = v.plan();
         Ausfuehrung.ausfuehren(plan, ziel, new PrintStream(new ByteArrayOutputStream()));
         v.nachEinsortieren(plan);
 
         Vorschlaege danach = Vorschlaege.einlesen(quelle, ziel, speicher);
-        assertEquals(1, danach.anzahlAenderungen());
+        assertEquals(2, danach.anzahlAenderungen());
         assertTrue(danach.istKorrigiert(unbekannt));
+        assertTrue(danach.istAusgelassen(pate));
         assertFalse(danach.istKorrigiert(showman));
     }
 

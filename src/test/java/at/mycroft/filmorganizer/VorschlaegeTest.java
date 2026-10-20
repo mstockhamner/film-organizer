@@ -49,12 +49,31 @@ class VorschlaegeTest {
     @Test
     void unbekannterFilmWirdMitTitelUndJahrEinsortiert() throws IOException {
         Vorschlaege v = Vorschlaege.einlesen(quelle, ziel);
-        v.korrigieren(unbekannt, "Der Pate", 0);
         assertEquals(Art.UNERKANNT, art(v.plan(), unbekannt));
+        // Titel genügt, das Jahr ist keine Pflicht.
+        v.korrigieren(unbekannt, "Der Pate", 0);
+        assertEquals(ziel.resolve("Der Pate/Der Pate.mkv"), aktion(v.plan(), unbekannt).verschiebungen().get(0).nach());
         v.korrigieren(unbekannt, "Der Pate", 1972);
         Aktion aktion = aktion(v.plan(), unbekannt);
         assertEquals(Art.EINSORTIEREN, aktion.art());
         assertEquals(720, aktion.film().info().aufloesung());
+    }
+
+    @Test
+    void filmOhneJahrWirdBeimNaechstenLaufWiedererkannt() throws IOException {
+        Vorschlaege v = Vorschlaege.einlesen(quelle, ziel);
+        v.korrigieren(unbekannt, "Der Pate", 0);
+        Ausfuehrung.ausfuehren(v.plan(), ziel, new java.io.PrintStream(java.io.OutputStream.nullOutputStream()));
+        assertEquals(true, Files.exists(ziel.resolve("Der Pate/Der Pate.mkv")));
+
+        Katalog.Eintrag eintrag = Katalog.laden(ziel).alle(new FilmInfo("Der Pate", 0, 0).schluessel()).get(0);
+        assertEquals("", eintrag.info().reihe(), "Titel/Datei ohne Jahr ist kein Reihen-Ordner");
+        Path nochmal = datei("Neu/nochmal.mkv", "andere");
+        Vorschlaege zweiter = Vorschlaege.einlesen(quelle, ziel);
+        zweiter.korrigieren(nochmal, "Der Pate", 0);
+        Aktion aktion = aktion(zweiter.plan(), nochmal);
+        assertEquals(Art.ERSETZEN, aktion.art(), "als vorhanden erkannt; die neue Datei ist größer");
+        assertEquals(true, aktion.hinweis().startsWith("schon in der Sammlung: Der Pate"));
     }
 
     @Test

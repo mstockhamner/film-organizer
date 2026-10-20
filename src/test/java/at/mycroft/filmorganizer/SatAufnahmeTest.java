@@ -67,12 +67,12 @@ class SatAufnahmeTest {
     }
 
     @Test
-    void ohneJahrIstDerTitelVorgeschlagenUndDasJahrWirdNachgetragen() throws IOException {
+    void ohneJahrWirdOhneJahrEinsortiertUndEinJahrLaesstSichNachtragen() throws IOException {
         Path video = datei("Aufnahmen 2020/20200612 2226 - ATV HD - The Greatest Showman.ts", "video");
         Vorschlaege v = Vorschlaege.einlesen(quelle, ziel());
         Aktion aktion = v.plan().stream().filter(a -> a.film().video().equals(video)).findFirst().orElseThrow();
-        assertEquals(Art.UNERKANNT, aktion.art());
-        assertEquals("Jahr nicht erkennbar", aktion.hinweis());
+        assertEquals(Art.EINSORTIEREN, aktion.art());
+        assertTrue(aktion.verschiebungen().get(0).nach().endsWith(Path.of("The Greatest Showman", "The Greatest Showman.ts")));
         assertEquals("The Greatest Showman", v.titel(aktion.film()), "nicht der Ordner 'Aufnahmen 2020'");
 
         v.korrigieren(video, v.titel(aktion.film()), 2017);

@@ -89,8 +89,7 @@ public final class Planer {
         Map<String, List<Film>> nachSchluessel = new LinkedHashMap<>();
         for (Film film : filme) {
             if (!film.erkannt()) {
-                aktionen.add(new Aktion(Art.UNERKANNT, film, List.of(),
-                        film.mitTitel() ? "Jahr nicht erkennbar" : "Titel und Jahr nicht erkennbar"));
+                aktionen.add(new Aktion(Art.UNERKANNT, film, List.of(), "Titel nicht erkennbar"));
             } else {
                 nachSchluessel.computeIfAbsent(film.info().fassungsSchluessel(), k -> new ArrayList<>()).add(film);
             }

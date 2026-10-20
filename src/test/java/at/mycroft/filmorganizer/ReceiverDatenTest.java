@@ -165,7 +165,10 @@ class ReceiverDatenTest {
         Aktion aktion = Main.planErstellen(quelle, quelle.resolve("Sammlung")).get(0);
         assertEquals(video, aktion.film().video());
         assertEquals("Die Nackte Kanone 33 1/3", aktion.film().info().titel());
-        assertEquals(Art.UNERKANNT, aktion.art(), "RTLZWEI nennt kein Jahr");
+        // RTLZWEI nennt kein Jahr: einsortiert ohne Jahr, "/" ist im Namen nicht erlaubt.
+        assertEquals(Art.EINSORTIEREN, aktion.art());
+        assertEquals(quelle.resolve("Sammlung/Die Nackte Kanone 33 1 3/Die Nackte Kanone 33 1 3.ts").toAbsolutePath().normalize(),
+                aktion.verschiebungen().get(0).nach().toAbsolutePath().normalize());
     }
 
     private Path aufnahme(String name, String titel, String beschreibung) throws IOException {

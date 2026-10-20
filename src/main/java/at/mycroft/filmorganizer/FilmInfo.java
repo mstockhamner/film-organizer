@@ -105,8 +105,9 @@ public record FilmInfo(String titel, int jahr, int aufloesung, int staffel, int 
         return fassung.isEmpty() ? titelUndJahr() : titelUndJahr() + " - " + Dateinamen.bereinigen(fassung);
     }
 
+    /** {@code Titel (Jahr)}, ohne bekanntes Jahr nur {@code Titel}. */
     private String titelUndJahr() {
-        return Dateinamen.bereinigen(titel) + " (" + jahr + ")";
+        return jahr > 0 ? Dateinamen.bereinigen(titel) + " (" + jahr + ")" : Dateinamen.bereinigen(titel);
     }
 
     /** Ordner eines Films: {@code Titel (Jahr)}, in einer Reihe mit Nummer {@code 04 - Titel (Jahr)}. */

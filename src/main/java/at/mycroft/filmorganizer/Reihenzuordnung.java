@@ -36,7 +36,7 @@ public final class Reihenzuordnung {
         if (Files.exists(zuordnung.datei)) {
             for (String zeile : Files.readAllLines(zuordnung.datei, StandardCharsets.UTF_8)) {
                 String[] teile = zeile.split("\t", -1);
-                if (zeile.startsWith("#") || teile.length < 2 || !teile[1].trim().matches("\\d{4}")) {
+                if (zeile.startsWith("#") || teile.length < 2 || !teile[1].trim().matches("\\d{1,4}")) {
                     continue;
                 }
                 String reihe = teile.length > 2 ? teile[2].trim() : "";

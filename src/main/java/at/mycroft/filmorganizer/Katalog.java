@@ -129,7 +129,8 @@ public final class Katalog {
      */
     static String reiheAusPfad(String video) {
         Path pfad = Path.of(video);
-        if (pfad.getNameCount() < 2) {
+        // Reihe/Film/Datei; bei Film/Datei (auch ohne Jahr im Ordnernamen) gibt es keine Reihe.
+        if (pfad.getNameCount() < 3) {
             return "";
         }
         String erster = pfad.getName(0).toString();

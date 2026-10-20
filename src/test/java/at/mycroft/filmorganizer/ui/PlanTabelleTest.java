@@ -39,7 +39,7 @@ class PlanTabelleTest {
         assertEquals(Path.of("Der gestiefelte Kater (2011)", "Der gestiefelte Kater (2011).mkv").toString(),
                 tabelle.getValueAt(0, PlanTabelle.NEUER_ORT));
         assertEquals("Nicht erkannt", tabelle.getValueAt(1, PlanTabelle.STATUS));
-        assertEquals("Titel und Jahr in der Tabelle eintragen", tabelle.getValueAt(1, PlanTabelle.NEUER_ORT));
+        assertEquals("Titel in der Tabelle eintragen (Jahr nach Wunsch)", tabelle.getValueAt(1, PlanTabelle.NEUER_ORT));
         assertTrue(tabelle.isCellEditable(1, PlanTabelle.TITEL));
 
         tabelle.setValueAt("Der Pate", 1, PlanTabelle.TITEL);
