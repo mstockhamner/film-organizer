@@ -1,9 +1,14 @@
 package at.mycroft.filmorganizer;
 
 import at.mycroft.filmorganizer.Aktion.Verschiebung;
+import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -12,6 +17,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.logging.Logger;
 import java.util.stream.Stream;
 
 /**
@@ -96,6 +102,11 @@ public final class Abgleich {
             return erste.video().toAbsolutePath().normalize() + "|" + zweite.video().toAbsolutePath().normalize();
         }
     }
+
+    /** Endung der Protokolle eines Abgleichs, damit Rückgängig sie von anderen Läufen unterscheidet. */
+    static final String ABGLEICH = "-abgleich";
+
+    private static final Logger LOG = Log.fuer(Abgleich.class);
 
     private final Map<Path, String> pruefsummen = new HashMap<>();
 
@@ -229,6 +240,122 @@ public final class Abgleich {
             pruefsummen.put(datei, summe);
         }
         return summe;
+    }
+
+    /** Die gewählte Entscheidung eines Fundes, sonst der Vorschlag. */
+    public static Wahl wahl(Fund fund, Map<String, Wahl> gewaehlt) {
+        return gewaehlt.getOrDefault(fund.kennung(), fund.vorschlag());
+    }
+
+    /**
+     * Führt den Abgleich aus: Jede nicht behaltene Fassung kommt mit ihren Begleitdateien in die Quarantäne
+     * ihrer Sammlung. Eine Fassung, die ein anderer Fund behalten will, wird nie verschoben. Jede Sammlung
+     * bekommt ein eigenes Protokoll ({@code <Zeitstempel>-abgleich.tsv}) für Rückgängig, ihr Katalog wird
+     * aktualisiert, leer gewordene Ordner werden entfernt.
+     *
+     * @return Anzahl der Fassungen, die in die Quarantäne gekommen sind
+     */
+    public static int ausfuehren(List<Fund> funde, Map<String, Wahl> gewaehlt, PrintStream ausgabe) throws IOException {
+        Set<Path> behalten = new HashSet<>();
+        for (Fund f : funde) {
+            switch (wahl(f, gewaehlt)) {
+                case ERSTE_BEHALTEN -> behalten.add(f.erste().video());
+                case ZWEITE_BEHALTEN -> behalten.add(f.zweite().video());
+                default -> { }
+            }
+        }
+        String zeitstempel = LocalDateTime.now().format(Ausfuehrung.ZEITSTEMPEL);
+        Map<Path, BufferedWriter> protokolle = new HashMap<>();
+        Map<Path, Katalog> kataloge = new HashMap<>();
+        Set<Path> erledigt = new HashSet<>();
+        int anzahl = 0;
+        try {
+            for (Fund f : funde) {
+                Wahl wahl = wahl(f, gewaehlt);
+                Fassung weg = wahl == Wahl.ERSTE_BEHALTEN ? f.zweite() : wahl == Wahl.ZWEITE_BEHALTEN ? f.erste() : null;
+                if (weg == null || erledigt.contains(weg.video())) {
+                    continue;
+                }
+                if (behalten.contains(weg.video())) {
+                    LOG.warning(() -> "Nicht verschoben, ein anderer Fund behält diese Fassung: " + weg.video());
+                    ausgabe.println("bleibt (wird an anderer Stelle behalten): " + weg.anzeige());
+                    continue;
+                }
+                List<Verschiebung> verschiebungen = verschiebungen(f, wahl);
+                if (verschiebungen.isEmpty()) {
+                    continue;
+                }
+                BufferedWriter protokoll = protokolle.get(weg.sammlung());
+                if (protokoll == null) {
+                    Path ordner = weg.sammlung().resolve(Katalog.VERWALTUNG).resolve(Ausfuehrung.PROTOKOLLE);
+                    Files.createDirectories(ordner);
+                    protokoll = Files.newBufferedWriter(ordner.resolve(zeitstempel + ABGLEICH + ".tsv"),
+                            StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+                    protokolle.put(weg.sammlung(), protokoll);
+                }
+                for (Verschiebung v : verschiebungen) {
+                    Ausfuehrung.verschieben(v.von(), v.nach());
+                    LOG.info(() -> "Abgleich, in Quarantäne: " + v.von() + " -> " + v.nach());
+                    protokoll.write(v.von() + "\t" + v.nach());
+                    protokoll.newLine();
+                    protokoll.flush();
+                }
+                Katalog katalog = kataloge.get(weg.sammlung());
+                if (katalog == null) {
+                    katalog = Katalog.laden(weg.sammlung());
+                    kataloge.put(weg.sammlung(), katalog);
+                }
+                katalog.entfernen(weg.sammlung().relativize(weg.video()).toString());
+                katalog.speichern();
+                Ausfuehrung.leerenOrdnerEntfernen(weg.video().getParent(), weg.sammlung());
+                erledigt.add(weg.video());
+                anzahl++;
+                ausgabe.println("in Quarantäne: " + weg.anzeige());
+            }
+        } finally {
+            for (BufferedWriter protokoll : protokolle.values()) {
+                protokoll.close();
+            }
+        }
+        return anzahl;
+    }
+
+    /**
+     * Macht den letzten Abgleich in beiden Sammlungen rückgängig, aber nur dort, wo er noch der letzte
+     * Lauf ist; ein späteres Einsortieren wird nie angefasst.
+     *
+     * @return Anzahl zurückverschobener Dateien, -1 wenn es keinen Abgleich rückgängig zu machen gibt
+     */
+    public static int rueckgaengig(Path a, Path b, PrintStream ausgabe) throws IOException {
+        Map<Path, String> letzte = new LinkedHashMap<>();
+        for (Path sammlung : List.of(a, b)) {
+            String name = letztesProtokoll(sammlung);
+            if (name != null && name.endsWith(ABGLEICH + ".tsv")) {
+                letzte.put(sammlung, name.substring(0, name.length() - (ABGLEICH + ".tsv").length()));
+            }
+        }
+        if (letzte.isEmpty()) {
+            return -1;
+        }
+        String juengster = letzte.values().stream().max(String::compareTo).orElseThrow();
+        int zurueck = 0;
+        for (Map.Entry<Path, String> e : letzte.entrySet()) {
+            if (e.getValue().equals(juengster)) {
+                zurueck += Math.max(0, Ausfuehrung.rueckgaengig(e.getKey(), ausgabe));
+            }
+        }
+        return zurueck;
+    }
+
+    private static String letztesProtokoll(Path sammlung) throws IOException {
+        Path ordner = sammlung.resolve(Katalog.VERWALTUNG).resolve(Ausfuehrung.PROTOKOLLE);
+        if (!Files.isDirectory(ordner)) {
+            return null;
+        }
+        try (Stream<Path> dateien = Files.list(ordner)) {
+            return dateien.map(p -> p.getFileName().toString()).filter(n -> n.endsWith(".tsv"))
+                    .max(String::compareTo).orElse(null);
+        }
     }
 
     /**

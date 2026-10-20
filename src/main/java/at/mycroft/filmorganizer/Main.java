@@ -47,6 +47,11 @@ public final class Main {
             aus.println(anzahl < 0 ? "Nichts rückgängig zu machen." : anzahl + " Dateien zurückverschoben.");
         } else if (abgleich(args, "abgleichen")) {
             abgleichAusgeben(Abgleich.abgleichen(Path.of(args[1]), Path.of(args[2]), inSich(args)), aus);
+        } else if (abgleich(args, "abgleichen-ausfuehren")) {
+            abgleichAusfuehren(Path.of(args[1]), Path.of(args[2]), inSich(args), aus);
+        } else if (args.length == 3 && args[0].equals("abgleich-rueckgaengig")) {
+            int anzahl = Abgleich.rueckgaengig(Path.of(args[1]), Path.of(args[2]), aus);
+            aus.println(anzahl < 0 ? "Kein Abgleich rückgängig zu machen." : anzahl + " Dateien zurückverschoben.");
         } else {
             aus.println(hilfe());
         }
@@ -68,8 +73,33 @@ public final class Main {
 
                   abgleichen <A> <B>             gleicht zwei organisierte Sammlungen auf Doubletten ab,
                                                  ändert nichts (A ist die Hauptsammlung)
+                  abgleichen-ausfuehren <A> <B>  zeigt die Funde und verschiebt nach Bestätigung die nicht
+                                                 behaltenen Fassungen in die Quarantäne ihrer Sammlung
                   --auch-in-sich                 prüft zusätzlich jede Sammlung in sich
+                  abgleich-rueckgaengig <A> <B>  macht den letzten Abgleich rückgängig
                 """;
+    }
+
+    private static void abgleichAusfuehren(Path a, Path b, boolean inSich, PrintStream aus) throws IOException {
+        List<Abgleich.Fund> funde = Abgleich.abgleichen(a, b, inSich);
+        abgleichAusgeben(funde, aus);
+        long anzahl = funde.stream().filter(f -> f.vorschlag() == Abgleich.Wahl.ERSTE_BEHALTEN
+                || f.vorschlag() == Abgleich.Wahl.ZWEITE_BEHALTEN).count();
+        if (anzahl == 0) {
+            aus.println("Nichts zu tun.");
+            return;
+        }
+        aus.print(anzahl + " Fassungen nach den Vorschlägen in die Quarantäne ihrer Sammlung verschieben? "
+                + "Zum Bestätigen \"ja\" eingeben: ");
+        aus.flush();
+        String antwort = new BufferedReader(new InputStreamReader(System.in)).readLine();
+        if (antwort == null || !antwort.trim().equalsIgnoreCase("ja")) {
+            aus.println("Abgebrochen, nichts verändert.");
+            return;
+        }
+        int erledigt = Abgleich.ausfuehren(funde, Map.of(), aus);
+        aus.println(erledigt + " Fassungen in die Quarantäne verschoben. Rückgängig mit: abgleich-rueckgaengig \""
+                + a + "\" \"" + b + "\"");
     }
 
     private static boolean abgleich(String[] args, String befehl) {

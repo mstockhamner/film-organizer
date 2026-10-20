@@ -36,13 +36,13 @@ import java.util.stream.Stream;
  */
 public final class Ausfuehrung {
 
-    private static final String PROTOKOLLE = "protokolle";
+    static final String PROTOKOLLE = "protokolle";
     static final String BERICHTE = "berichte";
     /** Kennung im Protokoll für eine vom Programm neu angelegte Datei (z.B. .nfo). */
     private static final String NEU = "NEU:";
     private static final String ERLEDIGT = ".rueckgaengig";
     // Mit Millisekunden, damit zwei Läufe in derselben Sekunde verschiedene Protokolle bekommen.
-    private static final DateTimeFormatter ZEITSTEMPEL = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS");
+    static final DateTimeFormatter ZEITSTEMPEL = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS");
 
     private static final Logger LOG = Log.fuer(Ausfuehrung.class);
 
@@ -369,7 +369,7 @@ public final class Ausfuehrung {
      * Entfernt leere Ordner bis hinauf zum Ziel, z.B. Staffel-, Serien- und Filmordner; Ordner mit nur
      * noch Systemresten samt diesen.
      */
-    private static void leerenOrdnerEntfernen(Path ordner, Path ziel) throws IOException {
+    static void leerenOrdnerEntfernen(Path ordner, Path ziel) throws IOException {
         for (Path o = ordner; o != null && !o.equals(ziel) && o.startsWith(ziel); o = o.getParent()) {
             if (!Files.isDirectory(o)) {
                 continue;

@@ -108,6 +108,50 @@ class AbgleichTest {
     }
 
     @Test
+    void ausfuehrenUndRueckgaengig() throws IOException {
+        List<Fund> funde = Abgleich.abgleichen(a, b, false);
+        Fund unklar = fund(funde, "Unklar");
+        Path paterB = fund(funde, "Der Pate").zweite().video();
+        Path paterA = fund(funde, "Der Pate").erste().video();
+        Path dschungelA = fund(funde, "Das Dschungelbuch").erste().video();
+        Path darkB = fund(funde, "Dark").zweite().video();
+        Path kopieB = funde.stream().filter(f -> f.zweite().info().titel().equals("Ganz Anderer Titel"))
+                .findFirst().orElseThrow().zweite().video();
+
+        int anzahl = Abgleich.ausfuehren(funde, java.util.Map.of(unklar.kennung(), Wahl.ZWEITE_BEHALTEN), still);
+        assertEquals(5, anzahl, "Pate B, Dschungelbuch A, Dark B, Kopie B, Unklar A");
+        assertTrue(Files.exists(paterA));
+        assertTrue(Files.notExists(paterB));
+        assertTrue(Files.exists(Planer.inQuarantaene(b, paterB)));
+        assertTrue(Files.notExists(paterB.getParent()), "leerer Filmordner in B ist weg");
+        assertTrue(Files.exists(Planer.inQuarantaene(a, dschungelA)));
+        assertTrue(Files.exists(Planer.inQuarantaene(b, darkB)));
+        assertTrue(Files.exists(Planer.inQuarantaene(b, kopieB)));
+        assertTrue(Files.exists(fund(funde, "Der Herr der Ringe").zweite().video()), "andere Fassung bleibt");
+
+        // Der Katalog von B kennt den Paten nicht mehr: ein erneuter Abgleich findet nur noch, was blieb.
+        assertTrue(Abgleich.abgleichen(a, b, false).stream()
+                .allMatch(f -> f.art() == Art.FASSUNG), Abgleich.abgleichen(a, b, false).toString());
+
+        assertTrue(Abgleich.rueckgaengig(a, b, still) > 0);
+        assertTrue(Files.exists(paterB));
+        assertTrue(Files.exists(dschungelA));
+        assertTrue(Files.notExists(a.resolve(Planer.QUARANTAENE)));
+        assertEquals(-1, Abgleich.rueckgaengig(a, b, still));
+    }
+
+    @Test
+    void rueckgaengigLaesstSpaetereLaeufeInRuhe() throws IOException {
+        List<Fund> funde = Abgleich.abgleichen(a, b, false);
+        Abgleich.ausfuehren(funde, java.util.Map.of(), still);
+        // Danach wird in A noch etwas einsortiert: dessen Protokoll ist jetzt das letzte in A.
+        einsortieren(a, "Neu.2020.German.1080p/neu.mkv", "neu");
+        Abgleich.rueckgaengig(a, b, still);
+        assertTrue(Files.exists(a.resolve("Neu (2020)/Neu (2020).mkv")), "späteres Einsortieren bleibt");
+        assertTrue(Files.exists(fund(funde, "Der Pate").zweite().video()), "in B wurde der Abgleich zurückgenommen");
+    }
+
+    @Test
     void kommandozeileZeigtDieVorschau() throws IOException {
         ByteArrayOutputStream text = new ByteArrayOutputStream();
         Main.abgleichAusgeben(Abgleich.abgleichen(a, b, false), new PrintStream(text, true, "UTF-8"));
