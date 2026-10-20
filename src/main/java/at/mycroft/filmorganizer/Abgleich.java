@@ -242,6 +242,42 @@ public final class Abgleich {
         return summe;
     }
 
+    /** Datei für die gespeicherten Entscheidungen zum Abgleich von {@code a} und {@code b}. */
+    static Path wahlenDatei(Path speicherordner, Path a, Path b) {
+        Path datei = Vorschlaege.arbeitsstandDatei(speicherordner, a, b);
+        return datei.resolveSibling(Dateinamen.ohneEndung(datei.getFileName().toString()) + ABGLEICH + ".tsv");
+    }
+
+    /** Gespeicherte Entscheidungen je Fund (Kennung → Wahl), leer wenn noch nichts gespeichert ist. */
+    public static Map<String, Wahl> wahlenLaden(Path speicherordner, Path a, Path b) throws IOException {
+        Map<String, Wahl> wahlen = new LinkedHashMap<>();
+        Path datei = wahlenDatei(speicherordner, a, b);
+        if (Files.isRegularFile(datei)) {
+            for (String zeile : Files.readAllLines(datei, StandardCharsets.UTF_8)) {
+                int tab = zeile.lastIndexOf('\t');
+                if (zeile.startsWith("#") || tab < 0) {
+                    continue;
+                }
+                try {
+                    wahlen.put(zeile.substring(0, tab), Wahl.valueOf(zeile.substring(tab + 1)));
+                } catch (IllegalArgumentException e) {
+                    LOG.warning(() -> "Zeile übersprungen: " + zeile);
+                }
+            }
+        }
+        return wahlen;
+    }
+
+    /** Speichert die Entscheidungen, damit der Abgleich später weiter bearbeitet werden kann. */
+    public static void wahlenSpeichern(Path speicherordner, Path a, Path b, Map<String, Wahl> wahlen) throws IOException {
+        Path datei = wahlenDatei(speicherordner, a, b);
+        List<String> zeilen = new ArrayList<>();
+        zeilen.add("# Entscheidungen zum Abgleich von " + a.toAbsolutePath().normalize() + " und " + b.toAbsolutePath().normalize());
+        wahlen.forEach((kennung, wahl) -> zeilen.add(kennung + "\t" + wahl.name()));
+        Files.createDirectories(datei.getParent());
+        Files.write(datei, zeilen, StandardCharsets.UTF_8);
+    }
+
     /** Die gewählte Entscheidung eines Fundes, sonst der Vorschlag. */
     public static Wahl wahl(Fund fund, Map<String, Wahl> gewaehlt) {
         return gewaehlt.getOrDefault(fund.kennung(), fund.vorschlag());

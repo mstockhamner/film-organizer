@@ -73,6 +73,7 @@ public final class Fenster extends JFrame {
     private final JButton reiheZuweisen = new JButton("Filmreihe zuweisen …");
     private final JButton reihenVerwalten = new JButton("Filmreihen verwalten …");
     private final JButton verwerfen = new JButton("Änderungen verwerfen …");
+    private final JButton abgleich = new JButton("Sammlungen abgleichen …");
     private final JTable ansicht = new JTable();
     private final JLabel status = new JLabel("Quelle und Ziel wählen, dann „Titel einlesen“.");
     private final JProgressBar fortschritt = new JProgressBar();
@@ -93,6 +94,8 @@ public final class Fenster extends JFrame {
         reihenVerwalten.addActionListener(e -> new ReihenDialog(this, tabelle.vorschlaege(), tabelle::aktualisieren)
                 .setVisible(true));
         verwerfen.addActionListener(e -> aenderungenVerwerfen());
+        abgleich.addActionListener(e -> new AbgleichFenster(ziel.getText().trim()).setVisible(true));
+        abgleich.setToolTipText("Zwei schon organisierte Sammlungen auf Doubletten abgleichen");
         verwerfen.setToolTipText("Änderungen in der Liste werden automatisch gespeichert und beim nächsten "
                 + "Einlesen wiederhergestellt. Hier lassen sie sich verwerfen.");
         einsortieren.setEnabled(false);
@@ -137,6 +140,8 @@ public final class Fenster extends JFrame {
         knoepfe.add(verwerfen);
         knoepfe.add(Box.createHorizontalStrut(8));
         knoepfe.add(rueckgaengig);
+        knoepfe.add(Box.createHorizontalStrut(24));
+        knoepfe.add(abgleich);
         GridBagConstraints c = new GridBagConstraints();
         c.gridx = 1;
         c.gridy = 2;
